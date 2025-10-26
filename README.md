@@ -440,6 +440,60 @@ docker compose exec mysql mysqldump -u root -p${DB_ROOT_PASSWORD} RentalCore > b
 
 ## 🛠️ Troubleshooting
 
+### ⚠️ Common Issues on Fresh Deployment
+
+**1. Services in Restart Loop (First Start)**
+
+This is **NORMAL** during first deployment! MySQL needs 60-90 seconds to import the database.
+
+```bash
+# Monitor MySQL initialization
+docker compose logs -f mysql
+
+# Wait for this message:
+# "MySQL init process done. Ready for start up."
+# "mysqld: ready for connections"
+```
+
+**Solution:** Wait 2-3 minutes. Services will start automatically once MySQL is healthy.
+
+**2. Cannot Login with admin/admin**
+
+This happens when you have an existing MySQL volume from a previous install.
+
+```bash
+# Check if admin user exists
+docker compose exec mysql mysql -u root -p${DB_ROOT_PASSWORD} ${DB_NAME} \
+  -e "SELECT username FROM users WHERE username='admin';"
+
+# If empty, reset the database:
+docker compose down -v  # ⚠️ DELETES ALL DATA!
+docker compose up -d    # Triggers fresh database init
+```
+
+**Wait 2-3 minutes** after the reset for complete initialization.
+
+**3. Services Start But Still Restart**
+
+Check healthcheck status:
+
+```bash
+docker compose ps
+
+# If unhealthy, check specific service logs
+docker compose logs rentalcore
+docker compose logs warehousecore
+```
+
+Common causes:
+- Database connection refused (wait for MySQL to be fully ready)
+- Wrong database credentials in `.env`
+- Network issues between containers
+
+**📖 Detailed Troubleshooting Guide:** See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for complete troubleshooting steps and solutions.
+
+---
+
 ### Service Won't Start
 
 **1. Check logs:**
