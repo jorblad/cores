@@ -1,24 +1,50 @@
 name: lager_weidelbach
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD}"
+      MYSQL_DATABASE: "${DB_NAME}"
+      MYSQL_USER: "${DB_USER}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./RentalCore.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "3306:3306"
+    networks:
+      - weidelbach
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   rentalcore:
     image: nobentie/rentalcore:latest
     container_name: rentalcore
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
     environment:
       # Domain configuration for cross-navigation (without protocol or port)
-      # Example: rent.server-nt.de or rental.example.com
+      # Example: rent.example.com or rental.example.com
       # Leave empty for auto-detection based on current hostname
       RENTALCORE_DOMAIN: "${RENTALCORE_DOMAIN:-}"
       WAREHOUSECORE_DOMAIN: "${WAREHOUSECORE_DOMAIN:-}"
       STORAGECORE_DOMAIN: "${WAREHOUSECORE_DOMAIN:-}"
-      # Cookie domain for SSO (e.g., .server-nt.de for subdomains, leave empty for localhost)
+      # Cookie domain for SSO (e.g., .example.com for subdomains, leave empty for localhost)
       COOKIE_DOMAIN: "${COOKIE_DOMAIN:-}"
       # Database (shared schema) - RentalCore uses these env var names
-      DB_HOST: "tsunami-events.de"
+      DB_HOST: "mysql"
       DB_PORT: "3306"
-      DB_USERNAME: "tsweb"
-      DB_PASSWORD: "j4z4mZv7DpG7cdCLkSQVjXCfXMOmt9dEGRp2Pmdn2Xzl5y8AAkwLmKX"
-      DB_NAME: "RentalCore"
+      DB_USERNAME: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_NAME: "${DB_NAME}"
       # App port
       SERVER_HOST: "0.0.0.0"
       SERVER_PORT: "8081"
@@ -31,27 +57,31 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+      start_period: 40s
 
   warehousecore:
     image: nobentie/warehousecore:latest
     container_name: warehousecore
     restart: unless-stopped
     depends_on:
-      - mosquitto
+      mysql:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
     environment:
       # Domain configuration for cross-navigation (without protocol or port)
-      # Example: rent.server-nt.de or rental.example.com
+      # Example: rent.example.com or rental.example.com
       # Leave empty for auto-detection based on current hostname
       RENTALCORE_DOMAIN: "${RENTALCORE_DOMAIN:-}"
       WAREHOUSECORE_DOMAIN: "${WAREHOUSECORE_DOMAIN:-}"
       STORAGECORE_DOMAIN: "${WAREHOUSECORE_DOMAIN:-}"
-      # Cookie domain for SSO (e.g., .server-nt.de for subdomains, leave empty for localhost)
+      # Cookie domain for SSO (e.g., .example.com for subdomains, leave empty for localhost)
       COOKIE_DOMAIN: "${COOKIE_DOMAIN:-}"
       # Database (shared schema)
-      DB_HOST: "tsunami-events.de"
-      DB_USER: "tsweb"
-      DB_PASS: "j4z4mZv7DpG7cdCLkSQVjXCfXMOmt9dEGRp2Pmdn2Xzl5y8AAkwLmKX"
-      DB_NAME: "RentalCore"
+      DB_HOST: "mysql"
+      DB_USER: "${DB_USER}"
+      DB_PASS: "${DB_PASSWORD}"
+      DB_NAME: "${DB_NAME}"
       # App port (adjust if the app expects a different env var)
       PORT: "8082"
       # LED MQTT Configuration
@@ -133,6 +163,7 @@ networks:
     driver: bridge
 
 volumes:
+  mysql-data:
   led-mapping:
   mosquitto-config:
   mosquitto-data:

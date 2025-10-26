@@ -31,6 +31,8 @@ data/
 
 # Claude Code files
 .claude/
+CLAUDE.md
+AGENTS.md
 
 # Migration backups
 migrations/*.backup

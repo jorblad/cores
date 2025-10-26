@@ -48,6 +48,16 @@ This repository contains the **deployment configuration** for the Tsunami Events
 **Docker Image:** `nobentie/warehousecore:latest`
 **Port:** 8082
 
+### **MySQL Database** - Shared Data Layer
+- MySQL 8.0 containerized database
+- Automatic schema initialization from `RentalCore.sql`
+- Shared between both applications
+- Persistent data storage with Docker volumes
+- Health checks and automatic recovery
+
+**Docker Image:** `mysql:8.0`
+**Port:** 3306
+
 ### **Mosquitto MQTT Broker** - LED Control
 - Self-hosted MQTT broker for LED warehouse bin highlighting
 - Automatic configuration and user management
@@ -79,22 +89,27 @@ This repository contains the **deployment configuration** for the Tsunami Events
          └────────┬────────────────┘
                   │
          ┌────────▼─────────┐
-         │  Shared MySQL    │
-         │    Database      │
-         │  (RentalCore)    │
-         │  db.example.com  │
+         │  MySQL 8.0       │
+         │  (Port 3306)     │
+         │                  │
+         │  Containerized   │
+         │  Auto-Init DB    │
          └──────────────────┘
 
          SSO Cookie Domain: .example.com
          Auto Cross-Navigation Between Apps
+         All Services in Docker Compose
 ```
 
 **Key Features:**
+- **Complete Stack**: Includes MySQL database, MQTT broker, and both applications
+- **Automatic Database Setup**: Schema automatically initialized on first start
 - **Shared Database Schema**: Both systems use the same MySQL database
 - **Single Sign-On (SSO)**: Seamless authentication across both applications
 - **Cross-Navigation**: Click to switch between RentalCore and WarehouseCore
 - **MQTT Integration**: Real-time LED control for physical warehouse bins
-- **Docker-Based**: Easy deployment with docker-compose
+- **Docker-Based**: One-command deployment with docker-compose
+- **No External Dependencies**: Everything runs in containers
 
 ---
 
@@ -104,7 +119,8 @@ This repository contains the **deployment configuration** for the Tsunami Events
 
 - Docker Engine 20.10+
 - Docker Compose 2.0+
-- Access to a MySQL database server
+
+**That's all you need!** The stack includes everything: MySQL database, MQTT broker, and both applications.
 
 ### Installation
 
@@ -117,29 +133,30 @@ cd cores
 2. **Copy environment configuration:**
 ```bash
 cp .env.example .env
-# Edit .env if needed (optional for localhost development)
+# Optional: Edit .env to change database passwords (recommended for production)
 ```
 
-3. **Pull the latest images:**
-```bash
-docker compose pull
-```
-
-4. **Start the stack:**
+3. **Start the complete stack:**
 ```bash
 docker compose up -d
 ```
 
-5. **Access the applications:**
+The first start will:
+- Download all Docker images
+- Create and initialize the MySQL database with the schema
+- Start all services with health checks
+- This may take 1-2 minutes
+
+4. **Access the applications:**
    - **RentalCore**: http://localhost:8081
    - **WarehouseCore**: http://localhost:8082
 
-6. **Check service status:**
+5. **Check service status:**
 ```bash
 docker compose ps
 ```
 
-**That's it!** Both applications are now running and communicating with the shared database.
+**That's it!** The complete system is now running with a fresh database, ready to use.
 
 ---
 
@@ -147,7 +164,23 @@ docker compose ps
 
 ### Environment Variables (`.env`)
 
-The `.env` file controls cross-navigation domains, SSO, and MQTT settings.
+The `.env` file controls database credentials, cross-navigation domains, SSO, and MQTT settings.
+
+#### **Database Configuration**
+
+The included MySQL container is configured via these variables:
+
+```env
+DB_ROOT_PASSWORD=change_me_root_password_123
+DB_NAME=RentalCore
+DB_USER=rentalcore_user
+DB_PASSWORD=change_me_user_password_456
+```
+
+**Important:**
+- Change these passwords in production!
+- The database schema (`RentalCore.sql`) is automatically imported on first start
+- Data is persisted in Docker volume `mysql-data`
 
 #### **Cross-Navigation Domains**
 
@@ -189,20 +222,6 @@ LED_MQTT_PASS=your_cloud_password
 ```
 
 **Important:** The same MQTT credentials must be used in ESP32 firmware (`secrets.h`) for LED control.
-
-### Database Configuration
-
-Database credentials are configured in `docker-compose.yml`:
-
-```yaml
-# Shared database for both services
-DB_HOST: db.example.com
-DB_NAME: RentalCore
-DB_USERNAME: your_db_user  # or DB_USER for WarehouseCore
-DB_PASSWORD: your_secure_password
-```
-
-**Database Schema:** Available in `RentalCore.sql`
 
 ---
 
@@ -381,13 +400,22 @@ docker compose up -d --force-recreate
 ### Backup Volumes
 
 ```bash
+# MySQL database backup (IMPORTANT!)
+docker run --rm -v lager_weidelbach_mysql-data:/data -v $(pwd):/backup alpine \
+  tar czf /backup/mysql-backup-$(date +%Y%m%d).tar.gz /data
+
 # LED mapping backup
-docker run --rm -v cores_led-mapping:/data -v $(pwd):/backup alpine \
+docker run --rm -v lager_weidelbach_led-mapping:/data -v $(pwd):/backup alpine \
   tar czf /backup/led-mapping-backup.tar.gz /data
 
 # Mosquitto data backup
-docker run --rm -v cores_mosquitto-data:/data -v $(pwd):/backup alpine \
+docker run --rm -v lager_weidelbach_mosquitto-data:/data -v $(pwd):/backup alpine \
   tar czf /backup/mosquitto-backup.tar.gz /data
+```
+
+**Alternative: MySQL dump**
+```bash
+docker compose exec mysql mysqldump -u root -p${DB_ROOT_PASSWORD} RentalCore > backup-$(date +%Y%m%d).sql
 ```
 
 ---
@@ -442,17 +470,33 @@ docker compose up -d --force-recreate
 
 ### Database Connection Issues
 
-**1. Test database connectivity:**
+**1. Check if MySQL container is healthy:**
+```bash
+docker compose ps mysql
+docker compose logs mysql
+```
+
+**2. Test database connection:**
+```bash
+docker compose exec mysql mysql -u root -p${DB_ROOT_PASSWORD} -e "SHOW DATABASES;"
+```
+
+**3. Verify applications can connect:**
 ```bash
 docker compose exec rentalcore wget -qO- http://localhost:8081/health
+docker compose exec warehousecore wget -qO- http://localhost:8082/health
 ```
 
-**2. Check database credentials in `docker-compose.yml`**
-
-**3. Verify database is accessible:**
+**4. If database initialization failed:**
 ```bash
-mysql -h db.example.com -u your_db_user -p RentalCore
+# Stop and remove all containers and volumes
+docker compose down -v
+
+# Start fresh (will reinitialize database)
+docker compose up -d
 ```
+
+**5. Check database credentials in `.env` file**
 
 ### Mosquitto MQTT Not Connecting
 
@@ -528,10 +572,12 @@ docker compose restart warehousecore
 
 - **Docker Engine**: 20.10 or higher
 - **Docker Compose**: 2.0 or higher
-- **RAM**: 2GB minimum (4GB recommended)
-- **CPU**: 2 cores minimum
-- **Disk**: 10GB minimum for images and volumes
-- **Network**: Access to your MySQL database server (port 3306)
+- **RAM**: 4GB minimum (8GB recommended for production)
+- **CPU**: 2 cores minimum (4 cores recommended)
+- **Disk**: 20GB minimum for images, database, and volumes
+- **Network**: Internet connection to pull Docker images
+
+**Note:** MySQL database is included in the stack - no external database required!
 
 ---
 
