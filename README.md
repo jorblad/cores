@@ -82,10 +82,10 @@ This repository contains the **deployment configuration** for the Tsunami Events
          │  Shared MySQL    │
          │    Database      │
          │  (RentalCore)    │
-         │ tsunami-events.de│
+         │  db.example.com  │
          └──────────────────┘
 
-         SSO Cookie Domain: .server-nt.de
+         SSO Cookie Domain: .example.com
          Auto Cross-Navigation Between Apps
 ```
 
@@ -104,7 +104,7 @@ This repository contains the **deployment configuration** for the Tsunami Events
 
 - Docker Engine 20.10+
 - Docker Compose 2.0+
-- Access to the shared MySQL database (tsunami-events.de)
+- Access to a MySQL database server
 
 ### Installation
 
@@ -153,9 +153,9 @@ The `.env` file controls cross-navigation domains, SSO, and MQTT settings.
 
 For **production with subdomains** (recommended):
 ```env
-RENTALCORE_DOMAIN=rent.server-nt.de
-WAREHOUSECORE_DOMAIN=warehouse.server-nt.de
-COOKIE_DOMAIN=.server-nt.de
+RENTALCORE_DOMAIN=rent.example.com
+WAREHOUSECORE_DOMAIN=warehouse.example.com
+COOKIE_DOMAIN=.example.com
 ```
 
 For **local development**:
@@ -175,8 +175,8 @@ LED_MQTT_PORT=1883
 LED_MQTT_TLS=false
 LED_MQTT_USER=leduser
 LED_MQTT_PASS=ledpassword123
-LED_MQTT_TOPIC_PREFIX=weidelbach
-LED_WAREHOUSE_ID=WDL
+LED_MQTT_TOPIC_PREFIX=warehouse
+LED_WAREHOUSE_ID=WH1
 ```
 
 For **cloud MQTT broker** (EMQX, HiveMQ, etc.):
@@ -196,10 +196,10 @@ Database credentials are configured in `docker-compose.yml`:
 
 ```yaml
 # Shared database for both services
-DB_HOST: tsunami-events.de
+DB_HOST: db.example.com
 DB_NAME: RentalCore
-DB_USERNAME: tsweb  # or DB_USER for WarehouseCore
-DB_PASSWORD: j4z4mZv7DpG7cdCLkSQVjXCfXMOmt9dEGRp2Pmdn2Xzl5y8AAkwLmKX
+DB_USERNAME: your_db_user  # or DB_USER for WarehouseCore
+DB_PASSWORD: your_secure_password
 ```
 
 **Database Schema:** Available in `RentalCore.sql`
@@ -215,18 +215,20 @@ This is the **best setup for production** with clean URLs and SSL support.
 #### 1. Create DNS Records
 
 ```
-rent.server-nt.de        A    123.45.67.89
-warehouse.server-nt.de   A    123.45.67.89
+rent.example.com        A    123.45.67.89
+warehouse.example.com   A    123.45.67.89
 ```
 
 #### 2. Configure nginx Reverse Proxy
 
-Use the included `nginx-reverse-proxy.conf`:
+Use the included `nginx-reverse-proxy.conf` as a template:
 
 ```bash
-# Copy nginx configuration
-sudo cp nginx-reverse-proxy.conf /etc/nginx/sites-available/lager-weidelbach.conf
-sudo ln -s /etc/nginx/sites-available/lager-weidelbach.conf /etc/nginx/sites-enabled/
+# Copy and edit nginx configuration
+sudo cp nginx-reverse-proxy.conf /etc/nginx/sites-available/cores.conf
+# Edit the file to match your domains
+sudo nano /etc/nginx/sites-available/cores.conf
+sudo ln -s /etc/nginx/sites-available/cores.conf /etc/nginx/sites-enabled/
 
 # Test and reload nginx
 sudo nginx -t
@@ -236,20 +238,20 @@ sudo systemctl reload nginx
 #### 3. Add SSL with Let's Encrypt (Optional)
 
 ```bash
-sudo certbot --nginx -d rent.server-nt.de -d warehouse.server-nt.de
+sudo certbot --nginx -d rent.example.com -d warehouse.example.com
 ```
 
 #### 4. Configure Environment
 
 ```env
-RENTALCORE_DOMAIN=rent.server-nt.de
-WAREHOUSECORE_DOMAIN=warehouse.server-nt.de
-COOKIE_DOMAIN=.server-nt.de
+RENTALCORE_DOMAIN=rent.example.com
+WAREHOUSECORE_DOMAIN=warehouse.example.com
+COOKIE_DOMAIN=.example.com
 ```
 
 #### Benefits:
 - ✅ No port numbers in URLs
-- ✅ Clean URLs (https://rent.server-nt.de)
+- ✅ Clean URLs (https://rent.example.com)
 - ✅ Automatic cross-navigation
 - ✅ SSL/HTTPS support
 - ✅ Professional appearance
@@ -449,7 +451,7 @@ docker compose exec rentalcore wget -qO- http://localhost:8081/health
 
 **3. Verify database is accessible:**
 ```bash
-mysql -h tsunami-events.de -u tsweb -p RentalCore
+mysql -h db.example.com -u your_db_user -p RentalCore
 ```
 
 ### Mosquitto MQTT Not Connecting
@@ -467,7 +469,7 @@ docker compose exec mosquitto cat /mosquitto/config/passwd
 **3. Test MQTT connection:**
 ```bash
 docker compose exec mosquitto mosquitto_sub -h localhost -p 1883 \
-  -u leduser -P ledpassword123 -t 'weidelbach/#' -v
+  -u leduser -P ledpassword123 -t 'warehouse/#' -v
 ```
 
 ### LED Mapping File Issues
@@ -518,7 +520,7 @@ docker compose restart warehousecore
 - Database credentials are in `docker-compose.yml` (for demo/testing only)
 - **For production**: Use Docker Secrets or external secret management
 - **MQTT Credentials**: Must match ESP32 firmware settings
-- **SSO**: Cookie domain must start with `.` for subdomain sharing (e.g., `.server-nt.de`)
+- **SSO**: Cookie domain must start with `.` for subdomain sharing (e.g., `.example.com`)
 
 ---
 
@@ -529,7 +531,7 @@ docker compose restart warehousecore
 - **RAM**: 2GB minimum (4GB recommended)
 - **CPU**: 2 cores minimum
 - **Disk**: 10GB minimum for images and volumes
-- **Network**: Access to tsunami-events.de:3306 (MySQL)
+- **Network**: Access to your MySQL database server (port 3306)
 
 ---
 
