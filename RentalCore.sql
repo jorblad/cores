@@ -3440,6 +3440,28 @@ ALTER TABLE `user_sessions`
   ADD CONSTRAINT `user_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`userID`) ON DELETE CASCADE;
 
 --
+-- Seed default RBAC roles for RentalCore and WarehouseCore
+--
+INSERT INTO `roles` (`name`, `display_name`, `description`, `permissions`, `is_system_role`, `is_active`, `created_at`, `updated_at`)
+VALUES
+('super_admin', 'Super Administrator', 'Full access across RentalCore + WarehouseCore', JSON_ARRAY('*'), 1, 1, NOW(), NOW()),
+('admin', 'Administrator', 'Administrative access to core RentalCore features', JSON_ARRAY('users.manage','jobs.manage','devices.manage','customers.manage','reports.view','settings.manage'), 1, 1, NOW(), NOW()),
+('manager', 'Manager', 'Operational management for jobs, devices and customers', JSON_ARRAY('jobs.manage','devices.manage','customers.manage','reports.view'), 1, 1, NOW(), NOW()),
+('operator', 'Operator', 'Operational access incl. scans and job/device visibility', JSON_ARRAY('jobs.view','jobs.create','devices.view','customers.view','scan.use'), 1, 1, NOW(), NOW()),
+('viewer', 'Viewer', 'Read-only visibility for jobs, devices and customers', JSON_ARRAY('jobs.view','devices.view','customers.view'), 1, 1, NOW(), NOW()),
+('warehouse_admin', 'Warehouse Admin', 'Full warehouse administration capabilities', JSON_ARRAY('warehouse.*'), 1, 1, NOW(), NOW()),
+('warehouse_manager', 'Warehouse Manager', 'Manage warehouse operations and reporting', JSON_ARRAY('warehouse.manage','warehouse.reports'), 1, 1, NOW(), NOW()),
+('warehouse_worker', 'Warehouse Worker', 'Execute warehouse scans and daily tasks', JSON_ARRAY('warehouse.scan','warehouse.view'), 1, 1, NOW(), NOW()),
+('warehouse_viewer', 'Warehouse Viewer', 'Read-only warehouse insights', JSON_ARRAY('warehouse.view'), 1, 1, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+  `display_name` = VALUES(`display_name`),
+  `description` = VALUES(`description`),
+  `permissions` = VALUES(`permissions`),
+  `is_system_role` = VALUES(`is_system_role`),
+  `is_active` = VALUES(`is_active`),
+  `updated_at` = NOW();
+
+--
 -- Insert default admin user (username: admin, password: admin)
 -- This user is created automatically on fresh database setup
 -- User MUST change password on first login (force_password_change=1)
@@ -3449,10 +3471,14 @@ VALUES (1, 'admin', 'admin@localhost', '$2a$14$/ubu0Bnral/RW8ipdAZijugcByjwP4040
 
 --
 -- Assign full admin roles to default admin user
--- User gets both RentalCore Admin (roleID=1) and WarehouseCore Admin (roleID=5)
---
-INSERT INTO `user_roles` (`userID`, `roleID`, `assigned_at`, `is_active`) VALUES
-(1, 1, NOW(), 1);
+-- User receives Super Admin + Warehouse Admin privileges across both systems
+INSERT INTO `user_roles` (`userID`, `roleID`, `assigned_at`, `is_active`)
+SELECT 1, r.roleID, NOW(), 1
+FROM `roles` r
+WHERE r.`name` IN ('super_admin', 'admin', 'warehouse_admin')
+ON DUPLICATE KEY UPDATE
+  `assigned_at` = VALUES(`assigned_at`),
+  `is_active` = VALUES(`is_active`);
 
 COMMIT;
 

@@ -151,23 +151,25 @@ The first start will:
    - **RentalCore**: http://localhost:8081
    - **WarehouseCore**: http://localhost:8082
 
-   **Default Admin Credentials:**
+   **Default Admin Credentials (auto-provisioned on first DB init):**
    - **Username**: `admin`
    - **Password**: `admin`
-   - **Roles**: Administrator (RentalCore), Warehouse Administrator (WarehouseCore)
+   - **Roles**: `super_admin`, `admin`, `warehouse_admin`
 
-   ⚠️ **IMPORTANT**: Change the default password immediately after first login!
+   ⚠️ **IMPORTANT**: The `admin` user is now forced to change their password on the very first login before accessing the system.
 
    **Default Roles Created:**
    - **RentalCore**:
-     - `admin` - Full system access
-     - `manager` - Equipment and job management
-     - `employee` - Basic operations access
-     - `viewer` - Read-only access
+     - `super_admin` - Full access across both core systems
+     - `admin` - Full RentalCore administration
+     - `manager` - Job, device & customer management
+     - `operator` - Operational work incl. scanning
+     - `viewer` - Read-only insights
    - **WarehouseCore**:
-     - `warehouse_admin` - Full warehouse management access
-     - `warehouse_manager` - Warehouse operations management
-     - `warehouse_employee` - Basic warehouse operations
+     - `warehouse_admin` - Full warehouse administration
+     - `warehouse_manager` - Warehouse operations + reporting
+     - `warehouse_worker` - Daily warehouse tasks & scans
+     - `warehouse_viewer` - Read-only warehouse access
 
 5. **Check service status:**
 ```bash
