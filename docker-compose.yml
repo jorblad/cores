@@ -36,7 +36,6 @@ services:
       # Leave empty for auto-detection based on current hostname
       RENTALCORE_DOMAIN: "${RENTALCORE_DOMAIN:-}"
       WAREHOUSECORE_DOMAIN: "${WAREHOUSECORE_DOMAIN:-}"
-      STORAGECORE_DOMAIN: "${WAREHOUSECORE_DOMAIN:-}"
       # Cookie domain for SSO (e.g., .example.com for subdomains, leave empty for localhost)
       COOKIE_DOMAIN: "${COOKIE_DOMAIN:-}"
       # Database (shared schema) - RentalCore uses these env var names
@@ -74,7 +73,6 @@ services:
       # Leave empty for auto-detection based on current hostname
       RENTALCORE_DOMAIN: "${RENTALCORE_DOMAIN:-}"
       WAREHOUSECORE_DOMAIN: "${WAREHOUSECORE_DOMAIN:-}"
-      STORAGECORE_DOMAIN: "${WAREHOUSECORE_DOMAIN:-}"
       # Cookie domain for SSO (e.g., .example.com for subdomains, leave empty for localhost)
       COOKIE_DOMAIN: "${COOKIE_DOMAIN:-}"
       # Database (shared schema)
