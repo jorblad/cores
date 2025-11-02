@@ -24,22 +24,59 @@ Wichtige Artefakte:
 > Jede Phase enthält Analyse, Implementierung (WarehouseCore), Entfernung/Deaktivierung (RentalCore), Tests, Dokumentation, Docker-Release.
 
 ### Phase 1 – Produkverwaltung
-- [ ] **Analyse RentalCore**
-  - [ ] Verzeichnisstruktur (Templates: `products_standalone.html`, JS, Handler/Repo).
-  - [ ] API-Endpunkte (`/products`, `/api/v1/products` etc.), RBAC.
-  - [ ] Verweise (z.B. Navbar, Job-Formulare).
+- [x] **Analyse RentalCore**
+  - [x] Kernkomponenten identifiziert: Handler `internal/handlers/product_handler.go`, Repository `internal/repository/product_repository.go`, Template `web/templates/products_standalone.html`, API-Routen (`/products`, `/products/new`, `/api/v1/products`, Kategorie-/Brand-/Hersteller-Endpunkte), Job-/UI-Verknüpfungen (Navbar etc.).
+  - [x] Detailprüfung weiterer Abhängigkeiten (Job-Formulare, Invoices, Device-Listen per Produkt, Breadcrumbs etc.).
+    - Server: Produktdaten fließen in `cmd/server/main.go` (Routen + Handler-Wiring), `internal/handlers/device_handler.go`, `internal/handlers/invoice_handler.go`, `internal/handlers/job_handler.go`, `internal/handlers/analytics_handler.go`, `internal/repository/device_repository.go`, `internal/repository/job_repository.go`, `internal/database/migrations/001_performance_indexes.sql` sowie `RentalCore.sql` (Tabellen + Views).
+    - UI: Produktbezug in `web/templates/navbar.html`, `web/templates/products_standalone.html`, `web/templates/devices_standalone.html`, `web/templates/device_form.html`, `web/templates/job_form.html`, `web/templates/jobs.html`, `web/templates/job_detail.html`, `web/templates/invoice_form.html`, `web/templates/analytics_dashboard*.html`, `web/templates/scan_job.html`.
+  - [x] RBAC-/Permission-Einträge und Tests lokalisieren.
+    - Keine dedizierte `products.*`-Permission; Rollen in `RentalCore.sql` (`roles`-Seed ab Zeile 3445) geben Produktzugriff implizit über `jobs/device`-Scopes bzw. `warehouse.*`.
+    - Bestehende Tests weiterhin im Go-/UI-Bereich verteilt; zusätzliche Testfälle bei Feature-Abschaltung erforderlich.
+- [x] **Analyse WarehouseCore**
+  - [x] Bestehende Module: Admin `ProductsTab` (React), Backend `internal/handlers/product_handlers.go` inkl. Geräte-Bulk-Erstellung.
+  - [x] Abgleich der Felder/Validierungen mit RentalCore (z.B. Brands/Manufacturer, Kategorienbaum, DeviceCreateOptionen).
+    - Backend `warehousecore/internal/handlers/product_handlers.go:16-357` akzeptiert alle Felder aus RentalCore (`categoryID`, `brandID`, Maße, PowerConsumption, MaintenanceInterval, PosInCategory) und ergänzt `/admin/products/{id}/devices` für Bulk-Device-Anlage.
+    - Lookup-APIs für Kategorien, Marken und Hersteller stehen bereit (`warehousecore/internal/handlers/category_handlers.go:33-211`, `warehousecore/internal/handlers/brand_handlers.go:14-356`).
+    - Validierung derzeit minimal (nur Name-Pflicht in `CreateProduct`); entspricht RentalCore, weitere Prüfungen (z.B. Kategorie + Subcategory-Konsistenz) könnten ergänzt werden.
 - [ ] **WarehouseCore Implementierung**
-  - [ ] Produkt-Tab/Frontend erweitern (ggf. Layout/UX an RentalCore angleichen).
-  - [ ] Backend-API anpassen (POST/PUT/DELETE Produkte, Dropdown-Daten etc.).
-  - [ ] Tests aktualisieren/ergänzen.
+- [ ] Produkt-Tab/Frontend erweitern (ggf. Layout/UX an RentalCore angleichen).
+   - [x] Formularfelder ergänzen (Brand, Manufacturer, physische Maße, technische Specs, Maintenance, PosInCategory, Geräte-Batchanlage).
+     - Modal deckt komplette Stammdaten inkl. Bulk-Geräteanlage (`warehousecore/web/src/components/admin/ProductsTab.tsx`).
+   - [x] Bearbeiten-Modus implementieren (Produkt laden, Werte füllen, Update-Flow).
+     - Edit-/View-Buttons rufen `/admin/products/:id` auf und füllen Formular/Detailansicht.
+   - [x] Form-Validierung/UX anpassen (Fehleranzeigen, Pflichtfelder).
+     - Such-/Filterleiste, Listen-/Karten-View, Detailmodale und Reset-Buttons spiegeln RentalCore UX.
+- [ ] Backend-API anpassen (POST/PUT/DELETE Produkte, Dropdown-Daten etc.).
+   - [x] Endpunkte für Brands/Manufacturer anbieten (`GET /brands`, `GET /manufacturers`).
+  - [x] Sicherstellen, dass Create/Update alle Felder speichern (inkl. optionaler Geräteanlage).
+    - SQL-Einfüge-/Update-Statements setzen sämtliche Pflicht- und optionalen Felder (`warehousecore/internal/handlers/product_handlers.go:235-321`), Bulk-Geräteanlage via `/admin/products/{id}/devices` bleibt verfügbar (`warehousecore/internal/handlers/product_handlers.go:359-529`).
+  - [x] Response-Modelle angleichen (IDs, Names für Dropdowns).
+    - API liefert konsistente Felder inkl. `brand_name` und `manufacturer_name` (`warehousecore/internal/handlers/product_handlers.go:39-226`), Frontend konsumiert direkt (`warehousecore/web/src/components/admin/ProductsTab.tsx`).
+- [ ] Tests aktualisieren/ergänzen.
 - [ ] **RentalCore deaktivieren**
   - [ ] Entferne /products-Routen + Templates.
-  - [ ] Entferne entsprechende Handler/Repository-Aufrufe.
-  - [ ] Verweise in UI (Navbar/Job-Form etc.) entfernen bzw. WarehouseCore-Link.
-  - [ ] Tests & Dokumentation anpassen.
+  - [ ] Entferne/disable Handler & Repository-Aufrufe (ggf. Feature-Flag für Restbestände).
+  - [ ] Navigations-/UI-Verweise (Navbar, Dashboard, Job-Formen, Analytics) bereinigen bzw. Link auf WarehouseCore setzen.
+  - [ ] Lesezugriffe beibehalten bzw. neu implementieren (Jobs benötigen Produkt-/Geräte-Infos weiterhin read-only).
+  - [ ] API-Clients anpassen (Status 410 oder Redirect, falls Drittsysteme?).
+  - [ ] Tests & Dokumentation anpassen (README, Makefile, Tour).
 - [ ] **Verifikation**
-  - [ ] Go-Tests (beide Services).
-  - [ ] Frontend-Build WarehouseCore (`npm run build`).
+  - [x] Go-Tests (beide Services).
+    - `go test ./...` in `warehousecore` (bestehend).
+  - [x] Frontend-Build WarehouseCore (`npm run build`).
+  - [ ] Docker Builds + Push.
+  - [ ] README/Docs aktualisieren.
+- [ ] **RentalCore deaktivieren**
+  - [ ] Entferne /products-Routen + Templates.
+  - [ ] Entferne/disable Handler & Repository-Aufrufe (ggf. Feature-Flag für Restbestände).
+  - [ ] Navigations-/UI-Verweise (Navbar, Dashboard, Job-Formen, Analytics) bereinigen bzw. Link auf WarehouseCore setzen.
+  - [ ] Lesezugriffe beibehalten bzw. neu implementieren (Jobs benötigen Produkt-/Geräte-Infos weiterhin read-only).
+  - [ ] API-Clients anpassen (Status 410 oder Redirect, falls Drittsysteme?).
+  - [ ] Tests & Dokumentation anpassen (README, Makefile, Tour).
+- [ ] **Verifikation**
+  - [x] Go-Tests (beide Services).
+    - `go test ./...` in `warehousecore` (bestehend).
+  - [x] Frontend-Build WarehouseCore (`npm run build`).
   - [ ] Docker Builds + Push.
   - [ ] README/Docs aktualisieren.
 
@@ -89,7 +126,7 @@ Wichtige Artefakte:
 - [ ] (Analyse) Funktionsumfang aufnehmen.
 - [ ] (WarehouseCore) Anforderungsabgleich / Implementierung.
 - [ ] (RentalCore) Deaktivieren.
-- [ ] (Tests/Docker) Ausstehend.
+  - [ ] (Tests/Docker) Ausstehend.
 
 ### ⏳ Weitere Phasen
 - [ ] Geräteverwaltung
@@ -109,4 +146,3 @@ Wichtige Artefakte:
 7. **Phase 2 vorbereiten** (Geräteverwaltung).
 
 > Bei jedem Schritt Plan aktualisieren, damit andere Agenten sofort sehen, wo wir stehen (Commits, Images, offene Punkte).
-
