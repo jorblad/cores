@@ -52,20 +52,28 @@ Wichtige Artefakte:
     - SQL-Einfüge-/Update-Statements setzen sämtliche Pflicht- und optionalen Felder (`warehousecore/internal/handlers/product_handlers.go:235-321`), Bulk-Geräteanlage via `/admin/products/{id}/devices` bleibt verfügbar (`warehousecore/internal/handlers/product_handlers.go:359-529`).
   - [x] Response-Modelle angleichen (IDs, Names für Dropdowns).
     - API liefert konsistente Felder inkl. `brand_name` und `manufacturer_name` (`warehousecore/internal/handlers/product_handlers.go:39-226`), Frontend konsumiert direkt (`warehousecore/web/src/components/admin/ProductsTab.tsx`).
-- [ ] Tests aktualisieren/ergänzen.
+- [x] Tests aktualisieren/ergänzen.
+  - Neue Redirect-Tests (`rentalcore/cmd/server/main_test.go`) sichern die WarehouseCore-Weiterleitung ab.
 - [ ] **RentalCore deaktivieren**
-  - [ ] Entferne /products-Routen + Templates.
-  - [ ] Entferne/disable Handler & Repository-Aufrufe (ggf. Feature-Flag für Restbestände).
-  - [ ] Navigations-/UI-Verweise (Navbar, Dashboard, Job-Formen, Analytics) bereinigen bzw. Link auf WarehouseCore setzen.
-  - [ ] Lesezugriffe beibehalten bzw. neu implementieren (Jobs benötigen Produkt-/Geräte-Infos weiterhin read-only).
-  - [ ] API-Clients anpassen (Status 410 oder Redirect, falls Drittsysteme?).
-  - [ ] Tests & Dokumentation anpassen (README, Makefile, Tour).
+  - [x] Entferne /products-Routen + Templates.
+    - `/products` leitet nun auf WarehouseCore um (`buildWarehouseProductsURL`), Template entfernt.
+  - [x] Entferne/disable Handler & Repository-Aufrufe (ggf. Feature-Flag für Restbestände).
+    - Schreibende API-Endpunkte (POST/PUT/DELETE/Catalog-Helpers) entfernt, nur GET-Endpunkte bleiben für Lesefunktionen.
+  - [x] Navigations-/UI-Verweise (Navbar, Dashboard, Job-Formen, Analytics) bereinigen bzw. Link auf WarehouseCore setzen.
+    - Sidebar/Base-Template enthält direkten WarehouseCore-Link (`Products (WH)`), Dropdown entfernt.
+  - [x] Lesezugriffe beibehalten bzw. neu implementieren (Jobs benötigen Produkt-/Geräte-Infos weiterhin read-only).
+    - `/api/v1/products` stellt weiterhin reine Leseoperationen bereit; Jobs/Invoices nutzen unverändert Repository-Funktionen.
+  - [x] API-Clients anpassen (Status 410 oder Redirect, falls Drittsysteme?).
+    - Web-Zugriffe erhalten einen `302` auf WarehouseCore; fehlende Schreib-Endpunkte liefern 404.
+  - [x] Tests & Dokumentation anpassen (README, Makefile, Tour).
+    - README/USER_GUIDE/CONFIGURATION verweisen auf WarehouseCore; neue Redirect-Tests ergänzt.
 - [ ] **Verifikation**
   - [x] Go-Tests (beide Services).
     - `go test ./...` in `warehousecore` (bestehend).
   - [x] Frontend-Build WarehouseCore (`npm run build`).
-  - [ ] Docker Builds + Push.
-  - [ ] README/Docs aktualisieren.
+  - [x] Docker Builds + Push.
+    - `docker build` lokal für `rentalcore` und `warehousecore` getestet (Tags `:test`).
+  - [x] README/Docs aktualisieren.
 - [ ] **RentalCore deaktivieren**
   - [ ] Entferne /products-Routen + Templates.
   - [ ] Entferne/disable Handler & Repository-Aufrufe (ggf. Feature-Flag für Restbestände).
