@@ -127,10 +127,15 @@ Wichtige Artefakte:
     - RentalCore: `nobentie/rentalcore:2.42` + `:latest`
     - Beide zu Docker Hub gepusht
 
-### Phase 3 – Scanner/Barcode Workflows
-- [ ] Identifiziere `scanner_handler.go`, `web/templates/scan_*`, WASM-Decoder etc.
-- [ ] Prüfe, wie WarehouseCore die Scanner-Funktion nutzen soll (z.B. vorhandenes React UI?).
-- [ ] Migriere APIs + Frontend, deaktiviere RentalCore Routen.
+### Phase 3 – Scanner/Barcode Workflows (KOMPLETT ENTFERNT)
+- [x] Scanner-Funktionalität komplett aus RentalCore entfernt (nicht migriert)
+- [x] 29 Dateien gelöscht: scanner_handler.go, 7 Templates, komplettes web/scanner/ Verzeichnis (WASM)
+- [x] Alle Scanner-Routen aus main.go entfernt (/scan, /scan-board, mobile scanner, API endpoints)
+- [x] Navigation bereinigt: Scanner-Buttons entfernt
+- [x] Config deprecated: ScannerEnabled auf false gesetzt
+- [x] Dokumentation aktualisiert: Scanner-Features aus README entfernt
+- [x] Docker Image: nobentie/rentalcore:2.43 + :latest gepusht
+- [x] Ergebnis: 16.218 Zeilen Code entfernt, Build erfolgreich, Tests bestanden
 
 ### Phase 4 – Kabel-Management
 - [ ] Handler/Routes (z.B. `/cables`), Templates, Services.
@@ -197,9 +202,27 @@ Wichtige Artefakte:
     - `nobentie/rentalcore:2.42` + `:latest` (Commit d32a847)
   - README/Dokumentation aktualisiert (Version 2.39 Changelog)
 
+### ✅ Phase 3 – Scanner/Barcode Workflows (KOMPLETT ENTFERNT)
+- [x] (Entscheidung) Scanner wird nicht migriert, sondern komplett entfernt
+- [x] (Analyse) Alle Scanner-Komponenten identifiziert:
+  - scanner_handler.go (1 Handler-Datei)
+  - 7 Scanner-Templates (scanner_demo, professional_scanner, scan_board, mobile_scanner, etc.)
+  - Komplettes web/scanner/ Verzeichnis (WASM-Decoder, UI, Worker)
+  - Alle Scanner-Routen in main.go (/scan, /scan-board, mobile scanner, API endpoints)
+- [x] (Löschung) 29 Dateien vollständig entfernt (16.218 Zeilen Code)
+- [x] (Bereinigung) Navigation und UI:
+  - Scanner-Links aus navbar.html entfernt
+  - Job-Detail Seite: "Scan devices" → "Add devices manually"
+  - ScannerEnabled Config auf deprecated gesetzt (default: false)
+- [x] (Tests/Docker) Erfolgreich abgeschlossen:
+  - Go-Build erfolgreich (keine Scanner-Referenzen mehr)
+  - Alle Tests bestanden
+  - Docker Image gebaut und gepusht: `nobentie/rentalcore:2.43` + `:latest` (Commit 2a1a59f)
+  - README aktualisiert (Version 2.43 Changelog)
+
 ### ⏳ Weitere Phasen
 - [x] Geräteverwaltung - ABGESCHLOSSEN ✅
-- [ ] Scanner/Barcode
+- [x] Scanner/Barcode - KOMPLETT ENTFERNT ✅
 - [ ] Kabelmanagement
 - [ ] Case-Management
 - [ ] Restliche Warehouse-Funktionen
@@ -222,11 +245,20 @@ Wichtige Artefakte:
   - RentalCore: `nobentie/rentalcore:2.42` + `:latest`
 - ✅ Dokumentation: README, Changelogs, Redirect-Tests aktualisiert
 
-### Phase 3 - Scanner/Barcode Workflows (Nächster Schritt)
-1. **Analyse RentalCore Scanner:** `scanner_handler.go`, `web/templates/scan_*`, WASM-Decoder
-2. **WarehouseCore prüfen:** Vorhandenes React UI für Scanner-Funktion (JobsPage bereits vorhanden?)
-3. **Migration entscheiden:** Entweder migrieren oder als shared service belassen
-4. **Tests + Docker:** Neue Images bauen falls Änderungen nötig
-5. **Plan.md aktualisieren:** Phase 3 Status dokumentieren
+### Phase 3 - Scanner/Barcode Workflows - KOMPLETT ENTFERNT ✅ (2025-11-03)
+- ✅ Scanner-Funktionalität wurde NICHT migriert, sondern komplett entfernt
+- ✅ 29 Dateien gelöscht (16.218 Zeilen Code)
+- ✅ Alle Scanner-Routen und Handler entfernt
+- ✅ WASM-Decoder komplett entfernt (web/scanner/ Verzeichnis)
+- ✅ Navigation und UI bereinigt
+- ✅ Version: `nobentie/rentalcore:2.43` + `:latest`
+- ✅ Build erfolgreich, alle Tests bestanden
+
+### Phase 4 - Kabelmanagement (Nächster Schritt)
+1. **Analyse RentalCore Kabel:** `cable_handler.go`, Templates, Routen
+2. **WarehouseCore erweitern:** Cable-CRUD-UI erstellen (analog zu ProductsTab/DevicesTab)
+3. **RentalCore deaktivieren:** Kabel-Management auf WarehouseCore umleiten
+4. **Tests + Docker:** Neue Images bauen und pushen
+5. **Plan.md aktualisieren:** Phase 4 Status dokumentieren
 
 > Bei jedem Schritt Plan aktualisieren, damit andere Agenten sofort sehen, wo wir stehen (Commits, Images, offene Punkte).
