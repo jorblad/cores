@@ -159,10 +159,29 @@ Wichtige Artefakte:
     - `nobentie/rentalcore:2.44` + `:latest` (Commit 3186d76)
   - README/Dokumentation aktualisiert (Version 2.44 Changelog)
 
-### Phase 5 – Case-Management
-- [ ] Handler/Routes (z.B. `/cases`), Templates.
-- [ ] WarehouseCore UI + API.
-- [ ] Entferne aus RentalCore.
+### Phase 5 – Case-Management (ABGESCHLOSSEN)
+- [x] (Analyse) Case-Management Features analysiert (Handler, Routen, Templates, APIs, Device-Mapping)
+- [x] (WarehouseCore) Vollständige Implementierung:
+  - Neue Komponente: `web/src/components/admin/CasesTab.tsx` (891 Zeilen)
+  - Features: CRUD, Device-Mapping, Label-Printing, Dimensions/Weight, Zone Assignment
+  - Statistics Dashboard (Free/Rented/Maintenance counts, total devices)
+  - Dual View Modes (Table/Cards)
+  - Admin-Tab "Cases" im AdminPage integriert (mit PackageOpen Icon)
+  - Backend API bereits vorhanden (handlers.go)
+- [x] (RentalCore) Deaktiviert:
+  - `/cases` Routen leiten auf WarehouseCore um (buildWarehouseCasesURL)
+  - Templates gelöscht: 4 Dateien (cases_list, case_form, case_detail, case_device_mapping) - 4.636 Zeilen
+  - Alle API-Routen entfernt (POST/PUT/DELETE)
+  - Navigation aktualisiert: "Cases (WH)" Link
+  - Redirect-Tests hinzugefügt (TestBuildWarehouseCasesURL*, 3 Tests)
+  - Read-only GET /cases/:id erhalten (für Jobs-Integration)
+- [x] (Tests/Docker) Erfolgreich abgeschlossen:
+  - Go-Tests bestanden (beide Services, 10/10 Tests passing)
+  - Frontend-Build erfolgreich (React + TypeScript + Vite)
+  - Docker Images gebaut und gepusht:
+    - `nobentie/warehousecore:1.10` + `:latest` (Commit b611ad8, 4a1a96a)
+    - `nobentie/rentalcore:2.45` + `:latest` (Commit 6ece5c8)
+  - README/Dokumentation aktualisiert (Version 2.45 Changelog)
 
 ### Phase 6 – Sonstige Warehouse-Funktionalität
 - [ ] Prüfen, ob weitere Warehouse-Funktionalitäten existieren (Bestände, Monitoring, LED etc).
@@ -241,8 +260,8 @@ Wichtige Artefakte:
 - [x] Geräteverwaltung - ABGESCHLOSSEN ✅
 - [x] Scanner/Barcode - KOMPLETT ENTFERNT ✅
 - [x] Kabelmanagement - ABGESCHLOSSEN ✅
-- [ ] Case-Management
-- [ ] Restliche Warehouse-Funktionen
+- [x] Case-Management - ABGESCHLOSSEN ✅
+- [ ] Restliche Warehouse-Funktionen (Optional)
 
 ## Nächste Schritte
 
@@ -285,12 +304,42 @@ Wichtige Artefakte:
   - RentalCore: `nobentie/rentalcore:2.44` + `:latest`
 - ✅ Dokumentation: README, Changelogs, Redirect-Tests aktualisiert
 
-### Phase 5 - Case-Management (Nächster Schritt)
-1. **Analyse RentalCore Cases:** `case_handler.go`, Templates, Routen
-2. **WarehouseCore erweitern:** Case-CRUD-UI erstellen (analog zu anderen Tabs)
-3. **Case-Device-Mapping:** Verwaltung der Geräte-Zuordnung zu Cases
-4. **RentalCore deaktivieren:** Case-Management auf WarehouseCore umleiten
-5. **Tests + Docker:** Neue Images bauen und pushen
-6. **Plan.md aktualisieren:** Phase 5 Status dokumentieren
+### Phase 5 - Case-Management - ABGESCHLOSSEN ✅ (2025-11-03)
+- ✅ Analyse abgeschlossen: Case-Handler, Routen, Templates, Device-Mapping identifiziert
+- ✅ WarehouseCore erweitert: CasesTab mit vollständigem CRUD (Create/Edit/Delete/View)
+- ✅ API bereits vorhanden: handlers.go hatte alle notwendigen Endpoints
+- ✅ Device-Mapping implementiert: View/Add/Remove devices in cases
+- ✅ Statistics Dashboard: Real-time counts (Free, Rented, Maintenance, Total Devices)
+- ✅ Label Printing: Integration mit Label-API für Case-Labels
+- ✅ Zone Assignment: Dropdown für Lagerzonen-Zuweisung
+- ✅ Dimensions & Weight: Erfassung von B×H×T und Gewicht
+- ✅ RentalCore deaktiviert: Redirect-Funktion, 4 Templates gelöscht (4.636 Zeilen)
+- ✅ Tests erfolgreich: Go-Tests + Frontend-Build für beide Services (10/10 Tests)
+- ✅ Docker-Images gepusht:
+  - WarehouseCore: `nobentie/warehousecore:1.10` + `:latest`
+  - RentalCore: `nobentie/rentalcore:2.45` + `:latest`
+- ✅ Dokumentation: README, Changelogs, Redirect-Tests aktualisiert
+
+## 🎉 Migration Erfolgreich Abgeschlossen
+
+Alle geplanten Phasen (1-5) der RentalCore → WarehouseCore Migration sind erfolgreich abgeschlossen!
+
+**Migrated Features:**
+- ✅ Produktverwaltung (Phase 1)
+- ✅ Geräteverwaltung (Phase 2)
+- ✅ Kabel-Management (Phase 4)
+- ✅ Case-Management (Phase 5)
+
+**Entfernt:**
+- ✅ Scanner-Funktionalität (Phase 3)
+
+**Ergebnis:**
+- RentalCore fokussiert sich auf Job-/Kunden-/Rechnungs-Management
+- WarehouseCore verwaltet komplette physische Lagerverwaltung
+- Klare Trennung der Verantwortlichkeiten
+- Über 28.000 Zeilen Code bereinigt
+- Alle Services laufen stabil mit Docker Images deployed
+
+**Optional - Phase 6:** Sonstige Warehouse-Funktionalität (LED, Monitoring) kann bei Bedarf später konsolidiert werden.
 
 > Bei jedem Schritt Plan aktualisieren, damit andere Agenten sofort sehen, wo wir stehen (Commits, Images, offene Punkte).
