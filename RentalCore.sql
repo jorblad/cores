@@ -1708,6 +1708,20 @@ CREATE TABLE `user_preferences` (
 -- --------------------------------------------------------
 
 --
+-- Tabellenstruktur für Tabelle `user_dashboard_widgets`
+--
+
+CREATE TABLE `user_dashboard_widgets` (
+  `id` bigint UNSIGNED NOT NULL,
+  `user_id` bigint UNSIGNED NOT NULL,
+  `widgets` json NOT NULL,
+  `created_at` datetime(3) DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime(3) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Tabellenstruktur für Tabelle `user_profiles`
 --
 
@@ -1937,6 +1951,118 @@ CREATE TABLE `zone_types` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Configurable zone types with LED defaults';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pdf_uploads`
+--
+
+CREATE TABLE `pdf_uploads` (
+  `upload_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `job_id` int DEFAULT NULL COMMENT 'Associated job if already exists',
+  `original_filename` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `stored_filename` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_path` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_size` bigint NOT NULL,
+  `mime_type` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_hash` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'SHA256 hash for deduplication',
+  `uploaded_by` bigint UNSIGNED DEFAULT NULL,
+  `uploaded_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `processing_status` enum('pending','processing','completed','failed') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
+  `processing_started_at` timestamp NULL DEFAULT NULL,
+  `processing_completed_at` timestamp NULL DEFAULT NULL,
+  `error_message` text COLLATE utf8mb4_unicode_ci,
+  `is_active` tinyint(1) DEFAULT '1',
+  PRIMARY KEY (`upload_id`),
+  KEY `idx_pdf_uploads_job` (`job_id`),
+  KEY `idx_pdf_uploads_status` (`processing_status`),
+  KEY `idx_pdf_uploads_hash` (`file_hash`),
+  KEY `idx_pdf_uploads_user` (`uploaded_by`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Uploaded PDF files for job creation';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pdf_extractions`
+--
+
+CREATE TABLE `pdf_extractions` (
+  `extraction_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `upload_id` bigint UNSIGNED NOT NULL,
+  `raw_text` longtext COLLATE utf8mb4_unicode_ci COMMENT 'Full OCR extracted text',
+  `extracted_data` json DEFAULT NULL COMMENT 'Structured data: customer, dates, items, prices',
+  `confidence_score` decimal(5,2) DEFAULT NULL COMMENT 'Overall OCR confidence 0-100',
+  `page_count` int DEFAULT '1',
+  `extraction_method` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'tesseract' COMMENT 'OCR engine used',
+  `extracted_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `customer_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Extracted customer name',
+  `customer_id` int DEFAULT NULL COMMENT 'Matched customer ID',
+  `document_date` date DEFAULT NULL COMMENT 'Extracted document date',
+  `document_number` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Invoice/offer number',
+  `total_amount` decimal(12,2) DEFAULT NULL COMMENT 'Extracted total price',
+  `discount_amount` decimal(12,2) DEFAULT NULL COMMENT 'Extracted discount',
+  `metadata` json DEFAULT NULL COMMENT 'Additional extraction metadata',
+  PRIMARY KEY (`extraction_id`),
+  UNIQUE KEY `unique_upload_extraction` (`upload_id`),
+  KEY `idx_pdf_extractions_customer` (`customer_id`),
+  KEY `idx_pdf_extractions_date` (`document_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='OCR extraction results from PDFs';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pdf_extraction_items`
+--
+
+CREATE TABLE `pdf_extraction_items` (
+  `item_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `extraction_id` bigint UNSIGNED NOT NULL,
+  `line_number` int DEFAULT NULL COMMENT 'Position in PDF',
+  `raw_product_text` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Original text from PDF',
+  `quantity` int DEFAULT NULL COMMENT 'Extracted quantity',
+  `unit_price` decimal(12,2) DEFAULT NULL COMMENT 'Extracted unit price',
+  `line_total` decimal(12,2) DEFAULT NULL COMMENT 'Extracted line total',
+  `mapped_product_id` int DEFAULT NULL COMMENT 'Linked product after mapping',
+  `mapping_confidence` decimal(5,2) DEFAULT NULL COMMENT 'Mapping confidence 0-100',
+  `mapping_status` enum('pending','auto_mapped','user_confirmed','user_rejected','needs_creation') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
+  `user_notes` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`item_id`),
+  KEY `idx_pdf_items_extraction` (`extraction_id`),
+  KEY `idx_pdf_items_product` (`mapped_product_id`),
+  KEY `idx_pdf_items_status` (`mapping_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Individual line items extracted from PDFs';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pdf_product_mappings`
+--
+
+CREATE TABLE `pdf_product_mappings` (
+  `mapping_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `pdf_product_text` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Text from PDF',
+  `normalized_text` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Cleaned/normalized version',
+  `product_id` int NOT NULL COMMENT 'Mapped product ID',
+  `mapping_type` enum('exact','fuzzy','manual') COLLATE utf8mb4_unicode_ci DEFAULT 'manual',
+  `confidence_score` decimal(5,2) DEFAULT NULL COMMENT 'Mapping confidence 0-100',
+  `usage_count` int DEFAULT '0' COMMENT 'How many times this mapping was used',
+  `last_used_at` timestamp NULL DEFAULT NULL,
+  `created_by` bigint UNSIGNED DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `is_active` tinyint(1) DEFAULT '1',
+  PRIMARY KEY (`mapping_id`),
+  UNIQUE KEY `unique_pdf_text_product` (`pdf_product_text`,`product_id`),
+  KEY `idx_pdf_mappings_product` (`product_id`),
+  KEY `idx_pdf_mappings_text` (`pdf_product_text`),
+  KEY `idx_pdf_mappings_normalized` (`normalized_text`),
+  KEY `idx_pdf_mappings_type` (`mapping_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Saved mappings between PDF text and products';
+
+-- --------------------------------------------------------
 
 --
 -- Indizes der exportierten Tabellen
@@ -2615,6 +2741,13 @@ ALTER TABLE `user_preferences`
   ADD UNIQUE KEY `user_id` (`user_id`);
 
 --
+-- Indizes für die Tabelle `user_dashboard_widgets`
+--
+ALTER TABLE `user_dashboard_widgets`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `idx_user_dashboard_widgets_user` (`user_id`);
+
+--
 -- Indizes für die Tabelle `user_profiles`
 --
 ALTER TABLE `user_profiles`
@@ -3049,6 +3182,12 @@ ALTER TABLE `user_passkeys`
   MODIFY `passkey_id` int NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT für Tabelle `user_dashboard_widgets`
+--
+ALTER TABLE `user_dashboard_widgets`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT für Tabelle `user_preferences`
 --
 ALTER TABLE `user_preferences`
@@ -3071,6 +3210,30 @@ ALTER TABLE `user_roles_wh`
 --
 ALTER TABLE `zone_types`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `pdf_uploads`
+--
+ALTER TABLE `pdf_uploads`
+  MODIFY `upload_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `pdf_extractions`
+--
+ALTER TABLE `pdf_extractions`
+  MODIFY `extraction_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `pdf_extraction_items`
+--
+ALTER TABLE `pdf_extraction_items`
+  MODIFY `item_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT für Tabelle `pdf_product_mappings`
+--
+ALTER TABLE `pdf_product_mappings`
+  MODIFY `mapping_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 -- --------------------------------------------------------
 
@@ -3413,6 +3576,12 @@ ALTER TABLE `user_preferences`
   ADD CONSTRAINT `fk_user_preferences_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`userID`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
+-- Constraints der Tabelle `user_dashboard_widgets`
+--
+ALTER TABLE `user_dashboard_widgets`
+  ADD CONSTRAINT `fk_dashboard_widgets_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`userID`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
 -- Constraints der Tabelle `user_profiles`
 --
 ALTER TABLE `user_profiles`
@@ -3440,26 +3609,32 @@ ALTER TABLE `user_sessions`
   ADD CONSTRAINT `user_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`userID`) ON DELETE CASCADE;
 
 --
--- Seed default RBAC roles for RentalCore and WarehouseCore
+-- Constraints der Tabelle `pdf_uploads`
 --
-INSERT INTO `roles` (`name`, `display_name`, `description`, `permissions`, `is_system_role`, `is_active`, `created_at`, `updated_at`)
-VALUES
-('super_admin', 'Super Administrator', 'Full access across RentalCore + WarehouseCore', JSON_ARRAY('*'), 1, 1, NOW(), NOW()),
-('admin', 'Administrator', 'Administrative access to core RentalCore features', JSON_ARRAY('users.manage','jobs.manage','devices.manage','customers.manage','reports.view','settings.manage'), 1, 1, NOW(), NOW()),
-('manager', 'Manager', 'Operational management for jobs, devices and customers', JSON_ARRAY('jobs.manage','devices.manage','customers.manage','reports.view'), 1, 1, NOW(), NOW()),
-('operator', 'Operator', 'Operational access incl. scans and job/device visibility', JSON_ARRAY('jobs.view','jobs.create','devices.view','customers.view','scan.use'), 1, 1, NOW(), NOW()),
-('viewer', 'Viewer', 'Read-only visibility for jobs, devices and customers', JSON_ARRAY('jobs.view','devices.view','customers.view'), 1, 1, NOW(), NOW()),
-('warehouse_admin', 'Warehouse Admin', 'Full warehouse administration capabilities', JSON_ARRAY('warehouse.*'), 1, 1, NOW(), NOW()),
-('warehouse_manager', 'Warehouse Manager', 'Manage warehouse operations and reporting', JSON_ARRAY('warehouse.manage','warehouse.reports'), 1, 1, NOW(), NOW()),
-('warehouse_worker', 'Warehouse Worker', 'Execute warehouse scans and daily tasks', JSON_ARRAY('warehouse.scan','warehouse.view'), 1, 1, NOW(), NOW()),
-('warehouse_viewer', 'Warehouse Viewer', 'Read-only warehouse insights', JSON_ARRAY('warehouse.view'), 1, 1, NOW(), NOW())
-ON DUPLICATE KEY UPDATE
-  `display_name` = VALUES(`display_name`),
-  `description` = VALUES(`description`),
-  `permissions` = VALUES(`permissions`),
-  `is_system_role` = VALUES(`is_system_role`),
-  `is_active` = VALUES(`is_active`),
-  `updated_at` = NOW();
+ALTER TABLE `pdf_uploads`
+  ADD CONSTRAINT `fk_pdf_uploads_job` FOREIGN KEY (`job_id`) REFERENCES `jobs` (`jobID`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_pdf_uploads_user` FOREIGN KEY (`uploaded_by`) REFERENCES `users` (`userID`) ON DELETE SET NULL;
+
+--
+-- Constraints der Tabelle `pdf_extractions`
+--
+ALTER TABLE `pdf_extractions`
+  ADD CONSTRAINT `fk_pdf_extractions_upload` FOREIGN KEY (`upload_id`) REFERENCES `pdf_uploads` (`upload_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_pdf_extractions_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customerID`) ON DELETE SET NULL;
+
+--
+-- Constraints der Tabelle `pdf_extraction_items`
+--
+ALTER TABLE `pdf_extraction_items`
+  ADD CONSTRAINT `fk_pdf_items_extraction` FOREIGN KEY (`extraction_id`) REFERENCES `pdf_extractions` (`extraction_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_pdf_items_product` FOREIGN KEY (`mapped_product_id`) REFERENCES `products` (`productID`) ON DELETE SET NULL;
+
+--
+-- Constraints der Tabelle `pdf_product_mappings`
+--
+ALTER TABLE `pdf_product_mappings`
+  ADD CONSTRAINT `fk_pdf_mappings_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`productID`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_pdf_mappings_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`userID`) ON DELETE SET NULL;
 
 --
 -- Insert default admin user (username: admin, password: admin)
@@ -3471,14 +3646,10 @@ VALUES (1, 'admin', 'admin@localhost', '$2a$14$/ubu0Bnral/RW8ipdAZijugcByjwP4040
 
 --
 -- Assign full admin roles to default admin user
--- User receives Super Admin + Warehouse Admin privileges across both systems
-INSERT INTO `user_roles` (`userID`, `roleID`, `assigned_at`, `is_active`)
-SELECT 1, r.roleID, NOW(), 1
-FROM `roles` r
-WHERE r.`name` IN ('super_admin', 'admin', 'warehouse_admin')
-ON DUPLICATE KEY UPDATE
-  `assigned_at` = VALUES(`assigned_at`),
-  `is_active` = VALUES(`is_active`);
+-- User gets both RentalCore Admin (roleID=1) and WarehouseCore Admin (roleID=5)
+--
+INSERT INTO `user_roles` (`userID`, `roleID`, `assigned_at`, `is_active`) VALUES
+(1, 1, NOW(), 1);
 
 COMMIT;
 

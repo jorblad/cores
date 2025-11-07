@@ -35,3 +35,4 @@ AGENTS.md
 
 # Migration backups
 migrations/*.backup
+rentalcore/
