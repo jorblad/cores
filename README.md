@@ -250,9 +250,13 @@ NEXTCLOUD_WEBDAV_URL=https://cloud.example.com/remote.php/dav/files/username
 NEXTCLOUD_WEBDAV_USER=your-nextcloud-user
 NEXTCLOUD_WEBDAV_PASSWORD=nextcloud-app-password
 NEXTCLOUD_WEBDAV_BASE_PATH=rentalcore-filepool
+FILEPOOL_ASSIGNED_ROOT=assigned
+FILEPOOL_UNASSIGNED_ROOT=unassigned
 # Optional: skip initial backfill of existing WebDAV files on startup
 # NEXTCLOUD_BACKFILL_ON_START=false
 ```
+
+Assigned/Unassigned cards only display files that physically live in the folders defined by `FILEPOOL_ASSIGNED_ROOT` and `FILEPOOL_UNASSIGNED_ROOT`.
 
 **Important:** The same MQTT credentials must be used in ESP32 firmware (`secrets.h`) for LED control.
 
