@@ -513,10 +513,15 @@ CREATE TABLE `devices` (
 -- Trigger `devices`
 --
 DELIMITER $$
-CREATE TRIGGER `devices` BEFORE INSERT ON `devices` FOR EACH ROW BEGIN
+CREATE TRIGGER `devices` BEFORE INSERT ON `devices` FOR EACH ROW device_trigger: BEGIN
   DECLARE abkuerzung   VARCHAR(50);
   DECLARE pos_cat       INT;
   DECLARE next_counter  INT;
+
+  -- Skip auto-generation for virtual package devices (start with PKG_)
+  IF NEW.deviceID IS NOT NULL AND NEW.deviceID LIKE 'PKG_%' THEN
+    LEAVE device_trigger;
+  END IF;
 
   -- 1) Abkürzung holen
   SELECT s.abbreviation
@@ -1014,8 +1019,11 @@ CREATE TABLE `jobdevices` (
   `jobID` int NOT NULL,
   `deviceID` varchar(50) NOT NULL,
   `custom_price` decimal(10,2) DEFAULT NULL,
+  `package_id` int DEFAULT NULL COMMENT 'If set, this device comes from a package and should not count in revenue',
+  `is_package_item` tinyint(1) DEFAULT '0' COMMENT 'TRUE if this device is from a package (for UI display)',
   `pack_status` enum('pending','packed','issued','returned') NOT NULL DEFAULT 'pending',
-  `pack_ts` datetime DEFAULT NULL
+  `pack_ts` datetime DEFAULT NULL,
+  KEY `idx_package_id` (`package_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -2027,6 +2035,7 @@ CREATE TABLE `zone_types` (
 CREATE TABLE `pdf_uploads` (
   `upload_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
   `job_id` int DEFAULT NULL COMMENT 'Associated job if already exists',
+  `document_id` int DEFAULT NULL COMMENT 'Reference to File Pool document',
   `original_filename` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `stored_filename` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `file_path` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -2044,7 +2053,9 @@ CREATE TABLE `pdf_uploads` (
   KEY `idx_pdf_uploads_job` (`job_id`),
   KEY `idx_pdf_uploads_status` (`processing_status`),
   KEY `idx_pdf_uploads_hash` (`file_hash`),
-  KEY `idx_pdf_uploads_user` (`uploaded_by`)
+  KEY `idx_pdf_uploads_user` (`uploaded_by`),
+  KEY `idx_pdf_uploads_document` (`document_id`),
+  CONSTRAINT `fk_pdf_uploads_document` FOREIGN KEY (`document_id`) REFERENCES `documents` (`documentID`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Uploaded PDF files for job creation';
 
 -- --------------------------------------------------------
@@ -2066,8 +2077,10 @@ CREATE TABLE `pdf_extractions` (
   `customer_id` int DEFAULT NULL COMMENT 'Matched customer ID',
   `document_date` date DEFAULT NULL COMMENT 'Extracted document date',
   `document_number` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Invoice/offer number',
-  `total_amount` decimal(12,2) DEFAULT NULL COMMENT 'Extracted total price',
-  `discount_amount` decimal(12,2) DEFAULT NULL COMMENT 'Extracted discount',
+  `parsed_total` decimal(12,2) DEFAULT NULL COMMENT 'Subtotal before discount',
+  `total_amount` decimal(12,2) DEFAULT NULL COMMENT 'Final amount after discount',
+  `discount_amount` decimal(12,2) DEFAULT NULL COMMENT 'Extracted discount amount',
+  `discount_percent` decimal(5,2) DEFAULT NULL COMMENT 'Extracted discount percentage',
   `metadata` json DEFAULT NULL COMMENT 'Additional extraction metadata',
   PRIMARY KEY (`extraction_id`),
   UNIQUE KEY `unique_upload_extraction` (`upload_id`),
@@ -3607,8 +3620,8 @@ ALTER TABLE `jobdevices`
 -- Constraints der Tabelle `job_packages`
 --
 ALTER TABLE `job_packages`
-  ADD CONSTRAINT `job_packages_ibfk_1` FOREIGN KEY (`job_id`) REFERENCES `jobs` (`jobID`) ON DELETE CASCADE,
-  ADD CONSTRAINT `job_packages_ibfk_2` FOREIGN KEY (`package_id`) REFERENCES `equipment_packages` (`packageID`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_job_packages_job` FOREIGN KEY (`job_id`) REFERENCES `jobs` (`jobID`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_job_packages_package` FOREIGN KEY (`package_id`) REFERENCES `product_packages` (`package_id`) ON DELETE RESTRICT,
   ADD CONSTRAINT `job_packages_ibfk_3` FOREIGN KEY (`added_by`) REFERENCES `users` (`userID`) ON DELETE SET NULL;
 
 --
