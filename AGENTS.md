@@ -10,16 +10,15 @@
 
 ## Build, Test & Development Commands
 - Managed environment runs on `docker03.nt.local` (user `noah`, SSH key installed); Komodo API access is allowed here to redeploy stacks, pull images, start/stop/restart stacks, and inspect logs as needed.
-- `docker compose up -d` — start the full stack locally.
+
 - `docker compose logs -f rentalcore|warehousecore` — stream logs.
-- `docker compose down -v` — reset containers and volumes for clean-state verification.
+
 - `make build`, `make run`, `make dev-setup` inside `rentalcore/` — compile, run, or bootstrap dependencies.
 - `make build`, `make test`, `go test ./...` inside `warehousecore/` — build and test.
 - Before releases, build and push each image with the next sequential version tag plus `latest` (e.g., `docker build -t nobentie/rentalcore:1.2.0 -t nobentie/rentalcore:latest . && docker push ...`).
 
 ## Operations & Access
 - Docker Hub username: `nobentie` (may reuse existing login); images live at `nobentie/rentalcore` and `nobentie/warehousecore`.
-- Komodo API for stack `tscores`: URL `https://komodo.server-nt.de/`, Key `K-oDZnlq8VY1NrRBe2w7K6ToeZ8RCAF8fXmzv2JZIW`, Secret `S-ViVaToOsAmKDKB3821pm4QvqE1AywY03pvaeOMSO`. Use for redeploying, pulling images, starting/stopping/restarting stacks, and inspecting logs.
 
 ## Coding Style & Naming Conventions
 - Run `gofmt` (or `go fmt ./...`) before review; apply `goimports` when imports change.
@@ -37,7 +36,7 @@
 - Mirror the build by pushing code to GitLab (per-service repo + cores if affected) so image and source stay in sync.
 - Before starting a build, check Docker Hub for the most recent `nobentie/rentalcore` or `nobentie/warehousecore` tag and bump to the next sequential version, then push both the new tag and `latest` alongside the corresponding GitLab commit.
 - Always push work to GitLab and refresh all relevant README files when behavior, configuration, or deployment steps change.
-
+- I AM LOGGED IN YOU CAN JUST EXECUTE THE NEEDED COMMANDS
 ## Commit & Pull Request Guidelines
 - Use imperative, present-tense commit subjects (e.g., `Ensure default admin seeding matches new RBAC`) capped at 72 characters.
 - Group related work per service; cross-cutting updates should call out both modules and referenced schema changes in the body.
