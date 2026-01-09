@@ -13,7 +13,7 @@
 
 -- RBAC Roles table (must be created before users for FK reference)
 CREATE TABLE IF NOT EXISTS roles (
-    id SERIAL PRIMARY KEY,
+    roleid SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
     scope VARCHAR(50) DEFAULT 'global',  -- 'global', 'rentalcore', 'warehousecore'
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS roles (
 
 -- Users table (for auth) - shared between both systems
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    userid SERIAL PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
@@ -45,9 +45,9 @@ CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active);
 -- User Roles junction table
 CREATE TABLE IF NOT EXISTS user_roles (
     id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id INT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    assigned_by INT REFERENCES users(id) ON DELETE SET NULL,
+    user_id INT NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    role_id INT NOT NULL REFERENCES roles(roleid) ON DELETE CASCADE,
+    assigned_by INT REFERENCES users(userid) ON DELETE SET NULL,
     assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, role_id)
 );
@@ -56,8 +56,8 @@ CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id);
 
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
-    id VARCHAR(255) PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_id VARCHAR(255) PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
     data TEXT,
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -69,7 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 -- Audit logs table
 CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
-    user_id INT REFERENCES users(id) ON DELETE SET NULL,
+    user_id INT REFERENCES users(userid) ON DELETE SET NULL,
     action VARCHAR(100) NOT NULL,
     entity_type VARCHAR(100),
     entity_id INT,
@@ -265,8 +265,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     final_revenue DECIMAL(12,2),
     startdate DATE,
     enddate DATE,
-    created_by INT REFERENCES users(id) ON DELETE SET NULL,
-    updated_by INT REFERENCES users(id) ON DELETE SET NULL,
+    created_by INT REFERENCES users(userid) ON DELETE SET NULL,
+    updated_by INT REFERENCES users(userid) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL
@@ -375,7 +375,7 @@ CREATE TABLE IF NOT EXISTS company_settings (
 -- User preferences table
 CREATE TABLE IF NOT EXISTS user_preferences (
     preference_id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    user_id INT NOT NULL UNIQUE REFERENCES users(userid) ON DELETE CASCADE,
     language VARCHAR(10) DEFAULT 'de',
     theme VARCHAR(20) DEFAULT 'dark',
     time_zone VARCHAR(50) DEFAULT 'Europe/Berlin',
@@ -441,7 +441,7 @@ CREATE TABLE IF NOT EXISTS device_movements (
     to_zone_id INT NULL REFERENCES storage_zones(zone_id) ON DELETE SET NULL,
     from_case_id INT NULL REFERENCES cases(caseid) ON DELETE SET NULL,
     to_case_id INT NULL REFERENCES cases(caseid) ON DELETE SET NULL,
-    moved_by INT NULL REFERENCES users(id) ON DELETE SET NULL,
+    moved_by INT NULL REFERENCES users(userid) ON DELETE SET NULL,
     movement_type VARCHAR(50) NOT NULL DEFAULT 'transfer',
     reason TEXT,
     metadata JSONB NULL,
@@ -460,7 +460,7 @@ CREATE TABLE IF NOT EXISTS scan_events (
     zone_id INT NULL REFERENCES storage_zones(zone_id) ON DELETE SET NULL,
     case_id INT NULL REFERENCES cases(caseid) ON DELETE SET NULL,
     scanner_id VARCHAR(100),
-    scanned_by INT NULL REFERENCES users(id) ON DELETE SET NULL,
+    scanned_by INT NULL REFERENCES users(userid) ON DELETE SET NULL,
     scan_type VARCHAR(50) NOT NULL DEFAULT 'identify',
     barcode_value VARCHAR(255) NOT NULL,
     scan_result VARCHAR(50) NOT NULL DEFAULT 'success',
@@ -477,12 +477,12 @@ CREATE INDEX IF NOT EXISTS idx_scan_barcode ON scan_events(barcode_value);
 CREATE TABLE IF NOT EXISTS defect_reports (
     defect_id SERIAL PRIMARY KEY,
     device_id VARCHAR(50) NOT NULL REFERENCES devices(deviceid) ON DELETE CASCADE,
-    reported_by INT NULL REFERENCES users(id) ON DELETE SET NULL,
+    reported_by INT NULL REFERENCES users(userid) ON DELETE SET NULL,
     severity VARCHAR(20) NOT NULL DEFAULT 'minor',
     status VARCHAR(20) NOT NULL DEFAULT 'open',
     description TEXT NOT NULL,
     resolution TEXT,
-    resolved_by INT NULL REFERENCES users(id) ON DELETE SET NULL,
+    resolved_by INT NULL REFERENCES users(userid) ON DELETE SET NULL,
     resolved_at TIMESTAMP NULL,
     metadata JSONB NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -581,7 +581,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     name VARCHAR(100) NOT NULL,
     key_hash VARCHAR(255) NOT NULL UNIQUE,
     key_prefix VARCHAR(20) NOT NULL,
-    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    user_id INT REFERENCES users(userid) ON DELETE CASCADE,
     permissions TEXT DEFAULT '[]',
     is_active BOOLEAN DEFAULT TRUE,
     expires_at TIMESTAMP,
@@ -628,7 +628,7 @@ ON CONFLICT (name) DO NOTHING;
 -- Password: 'admin' (bcrypt hash)
 -- IMPORTANT: force_password_change is TRUE - user MUST change password on first login!
 INSERT INTO users (username, email, password_hash, first_name, last_name, is_admin, is_active, force_password_change)
-VALUES ('admin', 'admin@example.com', '$2a$10$rDkP5e0v0xnXmOq2KYchZOqB5.EvXgC49D0RmRR3gv/X.5F5D1qVG', 'System', 'Administrator', TRUE, TRUE, TRUE)
+VALUES ('admin', 'admin@example.com', '$2a$10$AlHJcEvCFEXXAoxQ/S4XXeVy3coR0yHtTv0Pn3bHEH/z3t3jdGVru', 'System', 'Administrator', TRUE, TRUE, TRUE)
 ON CONFLICT (username) DO NOTHING;
 
 -- Assign all administrative roles to the default admin user
@@ -636,10 +636,10 @@ DO $$
 DECLARE
     admin_user_id INT;
 BEGIN
-    SELECT id INTO admin_user_id FROM users WHERE username = 'admin';
+    SELECT userid INTO admin_user_id FROM users WHERE username = 'admin';
     IF admin_user_id IS NOT NULL THEN
         INSERT INTO user_roles (user_id, role_id)
-        SELECT admin_user_id, id FROM roles WHERE name IN ('super_admin', 'admin', 'warehouse_admin')
+        SELECT admin_user_id, roleid FROM roles WHERE name IN ('super_admin', 'admin', 'warehouse_admin')
         ON CONFLICT (user_id, role_id) DO NOTHING;
     END IF;
 END $$;
