@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS roles (
     description TEXT,
     scope VARCHAR(50) DEFAULT 'global',  -- 'global', 'rentalcore', 'warehousecore'
     is_system BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
     permissions TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS user_roles (
     roleid INT NOT NULL REFERENCES roles(roleid) ON DELETE CASCADE,
     assigned_by INT REFERENCES users(userid) ON DELETE SET NULL,
     assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
     UNIQUE(userid, roleid)
 );
 CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(userid);
