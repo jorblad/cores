@@ -198,6 +198,24 @@ docker compose ps postgres
 docker compose exec rentalcore env | grep -E "DB_|POSTGRES"
 ```
 
+### Problem 6: Endless Login Redirect (Loop)
+
+**Symptom:** You login successfully, get redirected to "Change Password" (or Dashboard), but then immediately back to Login page.
+
+**Cause:** `COOKIE_DOMAIN` in `.env` is set to a domain (e.g. `.server-nt.de`) but you are accessing via `localhost` or IP. The browser rejects the cookie.
+
+**Solution:**
+1. Open `.env`
+2. Comment out or empty `COOKIE_DOMAIN`:
+   ```env
+   # COOKIE_DOMAIN=.example.com
+   COOKIE_DOMAIN=
+   ```
+3. Restart containers:
+   ```bash
+   docker compose up -d --force-recreate
+   ```
+
 ---
 
 ## 🔄 Common Operations
