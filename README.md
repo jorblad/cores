@@ -1,18 +1,19 @@
-# Tsunami Events - Core Management Systems
+# 🎯 Tsunami Events - Core Management Systems
 
-**Integrated Docker deployment for RentalCore and WarehouseCore**
+**Complete Docker-based deployment for RentalCore and WarehouseCore**
 
-A complete equipment rental and warehouse management solution built for professional event technology companies.
+An integrated equipment rental and warehouse management solution for professional event technology companies.
 
 ---
 
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
-- [System Architecture](#-system-architecture)
 - [Quick Start](#-quick-start)
+- [System Architecture](#-system-architecture)
 - [Configuration](#-configuration)
 - [Deployment Scenarios](#-deployment-scenarios)
+- [Default User & Roles](#-default-user--roles)
 - [Service Management](#-service-management)
 - [Updates & Maintenance](#-updates--maintenance)
 - [Troubleshooting](#-troubleshooting)
@@ -22,52 +23,75 @@ A complete equipment rental and warehouse management solution built for professi
 
 ## 🎯 Overview
 
-This repository contains the **deployment configuration** for the Tsunami Events core management systems:
+This repository contains the **deployment configuration** for the Tsunami Events core management systems.
+Deploy both applications on any server with a single `docker compose up -d` command.
 
 ### **RentalCore** - Job & Customer Management
-- Equipment rental management
-- Job tracking and scheduling
-- Customer database
-- Invoice generation
-- Device assignment and tracking
-- Revenue analytics
+- Equipment rental management and job tracking
+- Customer database with complete history
+- Invoice generation and revenue analytics
+- Device assignment and availability tracking
+- PDF processing with OCR and intelligent product mapping
 
 **Repository:** [git.server-nt.de/ntielmann/rentalcore](https://git.server-nt.de/ntielmann/rentalcore)
-**Docker Image:** `nobentie/rentalcore:1.55` (`latest`)
+**Docker Image:** `nobentie/rentalcore:5.3.0` (`latest`)
 **Port:** 8081
 
 ### **WarehouseCore** - Warehouse Management
-- Physical warehouse management
-- Device location tracking
-- Storage zone mapping
-- LED bin highlighting (MQTT-based)
-- Device movement history
-- Real-time inventory status
+- Physical warehouse mapping with zone management
+- Device location tracking and movement history
+- LED bin highlighting via MQTT (ESP32-based)
+- Real-time inventory status and barcode scanning
+- Case and cable management
 
 **Repository:** [git.server-nt.de/ntielmann/warehousecore](https://git.server-nt.de/ntielmann/warehousecore)
-**Docker Image:** `nobentie/warehousecore:2.51` (`latest`)
+**Docker Image:** `nobentie/warehousecore:5.8.0` (`latest`)
 **Port:** 8082
 
-### **PostgreSQL Database** - Shared Data Layer
-- PostgreSQL 17 containerized database
-- Automatic schema initialization from `/migrations/postgresql/` directory
-- Shared between both applications
-- Persistent data storage with Docker volumes
-- Health checks and automatic recovery
-- Default admin user created on first start: `admin` / `admin`
-- Admin user forced to change password on first login
+### **Shared Components**
+- **PostgreSQL 16** - Shared database (auto-initialized)
+- **Mosquitto MQTT** - LED control broker (included)
+- **Automatic Backups** - Daily database backups with retention
 
-**Docker Image:** `postgres:17`
-**Port:** 5432
+---
 
-### **Mosquitto MQTT Broker** - LED Control
-- Self-hosted MQTT broker for LED warehouse bin highlighting
-- Automatic configuration and user management
-- Supports both plain and TLS connections
-- WebSocket support for browser-based LED control
+## 🚀 Quick Start
 
-**Docker Image:** `eclipse-mosquitto:2.0`
-**Ports:** 1883 (MQTT), 8883 (MQTT/TLS), 9001 (WebSocket)
+### Prerequisites
+
+- Docker Engine 20.10+
+- Docker Compose V2
+
+**That's all you need!** Everything else is included.
+
+### Installation (3 Steps)
+
+1. **Clone this repository:**
+```bash
+git clone https://git.server-nt.de/ntielmann/cores.git
+cd cores
+```
+
+2. **Create configuration file:**
+```bash
+cp .env.example .env
+# Optional: Edit .env to change passwords (recommended for production)
+```
+
+3. **Start the complete stack:**
+```bash
+docker compose up -d
+```
+
+**Wait 1-2 minutes** for the database to initialize, then access:
+- **RentalCore**: http://localhost:8081
+- **WarehouseCore**: http://localhost:8082
+
+### Default Login
+
+| Username | Password | Notes |
+|----------|----------|-------|
+| `admin`  | `admin`  | **You will be forced to change the password on first login!** |
 
 ---
 
@@ -79,7 +103,7 @@ This repository contains the **deployment configuration** for the Tsunami Events
 └─────────────────────────────────────────────────────────────┘
 
 ┌──────────────────┐      ┌──────────────────┐      ┌─────────┐
-│   RentalCore     │◄────►│  WarehouseCore   │◄────►│ Mosquito│
+│   RentalCore     │◄────►│  WarehouseCore   │◄────►│Mosquitto│
 │   (Port 8081)    │      │   (Port 8082)    │      │  MQTT   │
 │                  │      │                  │      │ Broker  │
 │ • Jobs           │      │ • Zones          │      │         │
@@ -91,94 +115,26 @@ This repository contains the **deployment configuration** for the Tsunami Events
          └────────┬────────────────┘
                   │
          ┌────────▼─────────┐
-         │  PostgreSQL 17   │
+         │  PostgreSQL 16   │
          │  (Port 5432)     │
          │                  │
-         │  Containerized   │
          │  Auto-Init DB    │
+         │  Daily Backups   │
          └──────────────────┘
 
-         SSO Cookie Domain: .example.com
-         Auto Cross-Navigation Between Apps
-         All Services in Docker Compose
+         SSO Cookie Domain: Configured via .env
+         Cross-Navigation: Automatic switching between apps
 ```
 
-**Key Features:**
-- **Complete Stack**: Includes PostgreSQL database, MQTT broker, and both applications
-- **Automatic Database Setup**: Schema automatically initialized on first start
-- **Shared Database Schema**: Both systems use the same PostgreSQL database
-- **Single Sign-On (SSO)**: Seamless authentication across both applications
-- **Cross-Navigation**: Click to switch between RentalCore and WarehouseCore
-- **MQTT Integration**: Real-time LED control for physical warehouse bins
-- **Docker-Based**: One-command deployment with docker-compose
-- **No External Dependencies**: Everything runs in containers
+### Key Features
 
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Docker Engine 20.10+
-- Docker Compose 2.0+
-
-**That's all you need!** The stack includes everything: PostgreSQL database, MQTT broker, and both applications.
-
-### Installation
-
-1. **Clone this repository:**
-```bash
-git clone https://git.server-nt.de/ntielmann/cores.git
-cd cores
-```
-
-2. **Copy environment configuration:**
-```bash
-cp .env.example .env
-# Optional: Edit .env to change database passwords (recommended for production)
-```
-
-3. **Start the complete stack:**
-```bash
-docker compose up -d
-```
-
-The first start will:
-- Download all Docker images
-- Create and initialize the PostgreSQL database with the schema
-- Start all services with health checks
-- This may take 1-2 minutes
-
-4. **Access the applications:**
-   - **RentalCore**: http://localhost:8081
-   - **WarehouseCore**: http://localhost:8082
-
-   **Default Admin Credentials (auto-provisioned on first DB init):**
-   - **Username**: `admin`
-   - **Password**: `admin`
-   - **Roles**: `super_admin`, `admin`, `warehouse_admin`
-
-   ⚠️ **IMPORTANT**: The `admin` user is now forced to change their password on the very first login before accessing the system.
-
-   **Default Roles Created:**
-   - **RentalCore**:
-     - `super_admin` - Full access across both core systems
-     - `admin` - Full RentalCore administration
-     - `manager` - Job, device & customer management
-     - `operator` - Operational work incl. scanning
-     - `viewer` - Read-only insights
-   - **WarehouseCore**:
-     - `warehouse_admin` - Full warehouse administration
-     - `warehouse_manager` - Warehouse operations + reporting
-     - `warehouse_worker` - Daily warehouse tasks & scans
-     - `warehouse_viewer` - Read-only warehouse access
-
-5. **Check service status:**
-```bash
-docker compose ps
-```
-
-**That's it!** The complete system is now running with a fresh database, ready to use.
+- ✅ **Complete Stack** - PostgreSQL, MQTT, and both applications included
+- ✅ **Automatic Database Setup** - Schema auto-initialized on first start
+- ✅ **Single Sign-On (SSO)** - One login for both applications
+- ✅ **Cross-Navigation** - Seamless switching between apps
+- ✅ **Daily Backups** - Automatic PostgreSQL backups with 7-day retention
+- ✅ **LED Integration** - MQTT-based warehouse bin highlighting
+- ✅ **No External Dependencies** - Everything runs in containers
 
 ---
 
@@ -186,144 +142,44 @@ docker compose ps
 
 ### Environment Variables (`.env`)
 
-The `.env` file controls database credentials, cross-navigation domains, SSO, and MQTT settings.
+Copy `.env.example` to `.env` and adjust:
 
-#### **Database Configuration**
-
-The included PostgreSQL container is configured via these variables:
+#### Database
 
 ```env
-POSTGRES_PASSWORD=change_me_root_password_123
-DB_HOST=postgres
-DB_PORT=5432
-DB_NAME=RentalCore
-DB_USER=rentalcore_user
-DB_PASSWORD=change_me_user_password_456
-DB_SSLMODE=disable
+POSTGRES_DB=rentalcore
+POSTGRES_USER=rentalcore
+POSTGRES_PASSWORD=rentalcore123  # CHANGE IN PRODUCTION!
 ```
 
-**Important:**
-- Change these passwords in production!
-- The database schema (in `/migrations/postgresql/`) is automatically imported on first start
-- Data is persisted in Docker volume `postgres-data`
-- Default admin user: `admin` / `admin` (forced to change password on first login)
+#### Cross-Navigation (Production)
 
-#### **Cross-Navigation Domains**
-
-For **production with subdomains** (recommended):
 ```env
+# For subdomains (recommended):
 RENTALCORE_DOMAIN=rent.example.com
 WAREHOUSECORE_DOMAIN=warehouse.example.com
 COOKIE_DOMAIN=.example.com
-```
 
-For **local development**:
-```env
-# Leave empty - auto-detection uses localhost:8081 and localhost:8082
+# For localhost development: Leave empty
 RENTALCORE_DOMAIN=
 WAREHOUSECORE_DOMAIN=
 COOKIE_DOMAIN=
 ```
 
-#### **LED MQTT Configuration (WarehouseCore)**
+#### LED MQTT
 
-For **self-hosted Mosquitto** (included in stack):
 ```env
 LED_MQTT_HOST=mosquitto
 LED_MQTT_PORT=1883
-LED_MQTT_TLS=false
 LED_MQTT_USER=leduser
 LED_MQTT_PASS=ledpassword123
-LED_MQTT_TOPIC_PREFIX=warehouse
-LED_WAREHOUSE_ID=WH1
 ```
-
-For **cloud MQTT broker** (EMQX, HiveMQ, etc.):
-```env
-LED_MQTT_HOST=your-broker.emqxsl.com
-LED_MQTT_PORT=8883
-LED_MQTT_TLS=true
-LED_MQTT_USER=your_cloud_username
-LED_MQTT_PASS=your_cloud_password
-```
-
-#### **Nextcloud File Pool (RentalCore)**
-
-Enable the file pool to sync uploads with Nextcloud via WebDAV. Leave these empty to disable Nextcloud integration.
-
-```env
-NEXTCLOUD_WEBDAV_URL=https://cloud.example.com/remote.php/dav/files/username
-NEXTCLOUD_WEBDAV_USER=your-nextcloud-user
-NEXTCLOUD_WEBDAV_PASSWORD=nextcloud-app-password
-NEXTCLOUD_WEBDAV_BASE_PATH=rentalcore-filepool
-FILEPOOL_ASSIGNED_ROOT=assigned
-FILEPOOL_UNASSIGNED_ROOT=unassigned
-# Optional: skip initial backfill of existing WebDAV files on startup
-# NEXTCLOUD_BACKFILL_ON_START=false
-```
-
-Assigned/Unassigned cards only display files that physically live in the folders defined by `FILEPOOL_ASSIGNED_ROOT` and `FILEPOOL_UNASSIGNED_ROOT`.
-
-**Important:** The same MQTT credentials must be used in ESP32 firmware (`secrets.h`) for LED control.
 
 ---
 
 ## 🌐 Deployment Scenarios
 
-### **Recommended: Subdomain Setup with nginx Reverse Proxy**
-
-This is the **best setup for production** with clean URLs and SSL support.
-
-#### 1. Create DNS Records
-
-```
-rent.example.com        A    123.45.67.89
-warehouse.example.com   A    123.45.67.89
-```
-
-#### 2. Configure nginx Reverse Proxy
-
-Use the included `nginx-reverse-proxy.conf` as a template:
-
-```bash
-# Copy and edit nginx configuration
-sudo cp nginx-reverse-proxy.conf /etc/nginx/sites-available/cores.conf
-# Edit the file to match your domains
-sudo nano /etc/nginx/sites-available/cores.conf
-sudo ln -s /etc/nginx/sites-available/cores.conf /etc/nginx/sites-enabled/
-
-# Test and reload nginx
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-#### 3. Add SSL with Let's Encrypt (Optional)
-
-```bash
-sudo certbot --nginx -d rent.example.com -d warehouse.example.com
-```
-
-#### 4. Configure Environment
-
-```env
-RENTALCORE_DOMAIN=rent.example.com
-WAREHOUSECORE_DOMAIN=warehouse.example.com
-COOKIE_DOMAIN=.example.com
-```
-
-#### Benefits:
-- ✅ No port numbers in URLs
-- ✅ Clean URLs (https://rent.example.com)
-- ✅ Automatic cross-navigation
-- ✅ SSL/HTTPS support
-- ✅ Professional appearance
-- ✅ Single Sign-On (SSO) works seamlessly
-
----
-
-### **Alternative: Local Development**
-
-No configuration needed! The apps auto-detect localhost:
+### Local Development
 
 ```bash
 docker compose up -d
@@ -331,31 +187,56 @@ docker compose up -d
 # WarehouseCore: http://localhost:8082
 ```
 
-Cross-navigation works automatically between ports.
+### Production with Subdomains
+
+1. Configure DNS:
+   - `rent.example.com` → Your Server IP
+   - `warehouse.example.com` → Your Server IP
+
+2. Set `.env`:
+```env
+RENTALCORE_DOMAIN=rent.example.com
+WAREHOUSECORE_DOMAIN=warehouse.example.com
+COOKIE_DOMAIN=.example.com
+```
+
+3. Use nginx reverse proxy (see `nginx-reverse-proxy.conf`)
+
+4. Add SSL with Let's Encrypt:
+```bash
+sudo certbot --nginx -d rent.example.com -d warehouse.example.com
+```
 
 ---
 
-### **Alternative: VPS with Public IP and Ports**
+## 👤 Default User & Roles
 
-For simple deployments without a domain:
+### Default Admin User
 
-```env
-RENTALCORE_DOMAIN=123.45.67.89:8081
-WAREHOUSECORE_DOMAIN=123.45.67.89:8082
-```
+Created automatically on first database initialization:
 
-**Drawback:** Port numbers must be specified in URLs.
+| Field | Value |
+|-------|-------|
+| Username | `admin` |
+| Password | `admin` |
+| Email | `admin@example.com` |
+| Roles | `super_admin`, `admin`, `warehouse_admin` |
 
----
+**⚠️ IMPORTANT:** Password change is enforced on first login!
 
-### **Alternative: Internal Network**
+### Role Hierarchy
 
-For private network deployments:
-
-```env
-RENTALCORE_DOMAIN=192.168.1.100:8081
-WAREHOUSECORE_DOMAIN=192.168.1.100:8082
-```
+| Role | Scope | Description |
+|------|-------|-------------|
+| `super_admin` | Global | Full access to both systems |
+| `admin` | RentalCore | RentalCore administration |
+| `manager` | RentalCore | Jobs, customers, devices management |
+| `operator` | RentalCore | Operational flows with scanning |
+| `viewer` | RentalCore | Read-only access |
+| `warehouse_admin` | WarehouseCore | Warehouse administration |
+| `warehouse_manager` | WarehouseCore | Warehouse operations + reports |
+| `warehouse_worker` | WarehouseCore | Daily warehouse tasks |
+| `warehouse_viewer` | WarehouseCore | Read-only warehouse access |
 
 ---
 
@@ -364,45 +245,29 @@ WAREHOUSECORE_DOMAIN=192.168.1.100:8082
 ### View Logs
 
 ```bash
-# All services
-docker compose logs -f
-
-# Specific service
-docker compose logs -f rentalcore
-docker compose logs -f warehousecore
-docker compose logs -f mosquitto
-
-# Last 100 lines
-docker compose logs --tail=100 rentalcore
+docker compose logs -f              # All services
+docker compose logs -f rentalcore   # Specific service
+docker compose logs --tail=100 postgres  # Last 100 lines
 ```
 
 ### Restart Services
 
 ```bash
-# Restart all
-docker compose restart
-
-# Restart specific service
-docker compose restart rentalcore
-docker compose restart warehousecore
+docker compose restart              # All services
+docker compose restart rentalcore   # Specific service
 ```
 
 ### Stop Services
 
 ```bash
-# Stop all (keeps data)
-docker compose down
-
-# Stop all and remove volumes (WARNING: deletes data)
-docker compose down -v
+docker compose down                 # Stop (keeps data)
+docker compose down -v              # Stop and DELETE ALL DATA
 ```
 
-### Check Service Health
+### Health Check
 
 ```bash
 docker compose ps
-
-# Or check health endpoint directly
 curl http://localhost:8081/health
 curl http://localhost:8082/health
 ```
@@ -411,232 +276,70 @@ curl http://localhost:8082/health
 
 ## 🔄 Updates & Maintenance
 
-### Latest Release (2025-11-01)
+### Current Versions
 
-- **RentalCore 1.55**  
-  - Product-first job builder now shared between create/edit flows with availability awareness.  
-  - Device write APIs respond with `410 Gone`, guiding users to WarehouseCore for inventory changes.
-- **WarehouseCore 2.51**  
-  - Includes the latest device catalog endpoints consumed by RentalCore’s product assignment workflow.
+- **RentalCore:** 5.3.0 (January 2026)
+- **WarehouseCore:** 5.8.0 (January 2026)
 
-### Update Docker Images
+### Update to Latest
 
 ```bash
-# Pull latest images
 docker compose pull
-
-# Restart services with new images
 docker compose up -d
 ```
 
-This will download the latest versions from Docker Hub and restart the services.
-
-### Update Specific Service
+### Database Backup
 
 ```bash
-# Pull specific service
-docker compose pull rentalcore
+# Manual backup
+docker compose exec postgres pg_dump -U rentalcore rentalcore > backup-$(date +%Y%m%d).sql
 
-# Restart only that service
-docker compose up -d rentalcore
+# Automated backups are stored in the postgres-backups volume
+docker run --rm -v cores_postgres-backups:/backups alpine ls -la /backups
 ```
 
-### Force Recreate Containers
+### Restore Database
 
 ```bash
-# Useful when configuration changes
-docker compose up -d --force-recreate
-```
-
-### Backup Volumes
-
-```bash
-# PostgreSQL database backup (IMPORTANT!)
-docker run --rm -v lager_weidelbach_postgres-data:/data -v $(pwd):/backup alpine \
-  tar czf /backup/postgres-backup-$(date +%Y%m%d).tar.gz /data
-
-# LED mapping backup
-docker run --rm -v lager_weidelbach_led-mapping:/data -v $(pwd):/backup alpine \
-  tar czf /backup/led-mapping-backup.tar.gz /data
-
-# Mosquitto data backup
-docker run --rm -v lager_weidelbach_mosquitto-data:/data -v $(pwd):/backup alpine \
-  tar czf /backup/mosquitto-backup.tar.gz /data
-```
-
-**Alternative: PostgreSQL dump**
-```bash
-docker compose exec postgres pg_dump -U ${DB_USER} ${DB_NAME:-RentalCore} > backup-$(date +%Y%m%d).sql
+docker compose exec -T postgres psql -U rentalcore rentalcore < backup.sql
 ```
 
 ---
 
 ## 🛠️ Troubleshooting
 
-### ⚠️ Common Issues on Fresh Deployment
+### First Start Issues
 
-**1. Services in Restart Loop (First Start)**
+**1. Services restarting continuously?**
+- Normal during first start! PostgreSQL needs 30-60 seconds to initialize.
+- Monitor: `docker compose logs -f postgres`
+- Wait for: "database system is ready to accept connections"
 
-This is **NORMAL** during first deployment! PostgreSQL needs 30-60 seconds to import the database.
-
+**2. Can't login with admin/admin?**
+- Existing volume won't reinitialize. Reset with:
 ```bash
-# Monitor PostgreSQL initialization
-docker compose logs -f postgres
-
-# Wait for this message:
-# "PostgreSQL init process complete; ready for start up."
-# "database system is ready to accept connections"
-```
-
-**Solution:** Wait 1-2 minutes. Services will start automatically once PostgreSQL is healthy.
-
-**2. Cannot Login with admin/admin**
-
-This happens when you have an existing PostgreSQL volume from a previous install.
-
-```bash
-# Check if admin user exists
-docker compose exec postgres psql -U ${DB_USER} -d ${DB_NAME} \
-  -c "SELECT username, email FROM users WHERE username='admin';"
-
-# If empty, reset the database:
 docker compose down -v  # ⚠️ DELETES ALL DATA!
-docker compose up -d    # Triggers fresh database init from /migrations/postgresql/
-```
-
-**Wait 1-2 minutes** after the reset for complete initialization.
-
-**3. Services Start But Still Restart**
-
-Check healthcheck status:
-
-```bash
-docker compose ps
-
-# If unhealthy, check specific service logs
-docker compose logs rentalcore
-docker compose logs warehousecore
-```
-
-Common causes:
-- Database connection refused (wait for PostgreSQL to be fully ready)
-- Wrong database credentials in `.env`
-- Network issues between containers
-
-**📖 Detailed Troubleshooting Guide:** See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for complete troubleshooting steps and solutions.
-
----
-
-### Service Won't Start
-
-**1. Check logs:**
-```bash
-docker compose logs [service-name]
-```
-
-**2. Check if ports are already in use:**
-```bash
-sudo lsof -i :8081
-sudo lsof -i :8082
-sudo lsof -i :1883
-```
-
-**3. Force recreate:**
-```bash
-docker compose up -d --force-recreate [service-name]
-```
-
-### Port Already in Use
-
-Edit `docker-compose.yml` to change external ports:
-
-```yaml
-ports:
-  - "9081:8081"  # External port 9081 instead of 8081
-```
-
-### Cross-Navigation Not Working
-
-**1. Check environment variables:**
-```bash
-cat .env
-```
-
-**2. Verify domain configuration:**
-```bash
-docker compose exec rentalcore printenv | grep DOMAIN
-docker compose exec warehousecore printenv | grep DOMAIN
-```
-
-**3. Restart services:**
-```bash
-docker compose up -d --force-recreate
-```
-
-### Database Connection Issues
-
-**1. Check if PostgreSQL container is healthy:**
-```bash
-docker compose ps postgres
-docker compose logs postgres
-```
-
-**2. Test database connection:**
-```bash
-docker compose exec postgres psql -U ${DB_USER} -d postgres -c "\l"
-```
-
-**3. Verify applications can connect:**
-```bash
-docker compose exec rentalcore wget -qO- http://localhost:8081/health
-docker compose exec warehousecore wget -qO- http://localhost:8082/health
-```
-
-**4. If database initialization failed:**
-```bash
-# Stop and remove all containers and volumes
-docker compose down -v
-
-# Start fresh (will reinitialize database)
 docker compose up -d
 ```
 
-**5. Check database credentials in `.env` file**
-
-### Mosquitto MQTT Not Connecting
-
-**1. Check Mosquitto logs:**
+**3. Port already in use?**
 ```bash
-docker compose logs mosquitto
+sudo lsof -i :8081
+sudo lsof -i :8082
 ```
 
-**2. Verify MQTT credentials:**
-```bash
-docker compose exec mosquitto cat /mosquitto/config/passwd
-```
+### Common Solutions
 
-**3. Test MQTT connection:**
 ```bash
-docker compose exec mosquitto mosquitto_sub -h localhost -p 1883 \
-  -u leduser -P ledpassword123 -t 'warehouse/#' -v
-```
+# Complete reset
+docker compose down -v
+docker compose up -d
 
-### LED Mapping File Issues
+# Force recreate containers
+docker compose up -d --force-recreate
 
-**1. Check LED mapping volume:**
-```bash
-docker volume inspect cores_led-mapping
-```
-
-**2. View current mapping:**
-```bash
-docker compose exec warehousecore cat /var/lib/warehousecore/led/led_mapping.json
-```
-
-**3. Reset to defaults:**
-```bash
-docker volume rm cores_led-mapping
-docker compose restart warehousecore
+# Pull fresh images
+docker compose pull
 ```
 
 ---
@@ -645,95 +348,42 @@ docker compose restart warehousecore
 
 ### Repositories
 
-- **This Deployment Repository**: [git.server-nt.de/ntielmann/cores](https://git.server-nt.de/ntielmann/cores)
+- **This Deployment Repo**: [git.server-nt.de/ntielmann/cores](https://git.server-nt.de/ntielmann/cores)
 - **RentalCore**: [git.server-nt.de/ntielmann/rentalcore](https://git.server-nt.de/ntielmann/rentalcore)
 - **WarehouseCore**: [git.server-nt.de/ntielmann/warehousecore](https://git.server-nt.de/ntielmann/warehousecore)
 
 ### Docker Images
 
-- **RentalCore**: [nobentie/rentalcore](https://hub.docker.com/r/nobentie/rentalcore)
-- **WarehouseCore**: [nobentie/warehousecore](https://hub.docker.com/r/nobentie/warehousecore)
+- **RentalCore**: [hub.docker.com/r/nobentie/rentalcore](https://hub.docker.com/r/nobentie/rentalcore)
+- **WarehouseCore**: [hub.docker.com/r/nobentie/warehousecore](https://hub.docker.com/r/nobentie/warehousecore)
 
 ### Documentation
 
-- **RentalCore README**: See rentalcore repository
-- **WarehouseCore README**: See warehousecore repository
-- **Development Guide**: See `CLAUDE.md` in this repository
-- **Database Schema**: `/migrations/postgresql/` directory
-
----
-
-## 🔐 Security Notes
-
-- **Default Admin User**: A default admin account (username: `admin`, password: `admin`) is created automatically on first startup. **The user is forced to change the password on the first login.**
-- The `.env` file contains **no database credentials** (safe to commit)
-- Database credentials are in `docker-compose.yml` (for demo/testing only)
-- **For production**: Use Docker Secrets or external secret management
-- **MQTT Credentials**: Must match ESP32 firmware settings
-- **SSO**: Cookie domain must start with `.` for subdomain sharing (e.g., `.example.com`)
+- **Database Schema**: `migrations/postgresql/000_combined_init.sql`
+- **Nginx Config**: `nginx-reverse-proxy.conf`
+- **Development Guide**: `CLAUDE.md`
 
 ---
 
 ## 📝 System Requirements
 
-- **Docker Engine**: 20.10 or higher
-- **Docker Compose**: 2.0 or higher
-- **RAM**: 4GB minimum (8GB recommended for production)
-- **CPU**: 2 cores minimum (4 cores recommended)
-- **Disk**: 20GB minimum for images, database, and volumes
-- **Network**: Internet connection to pull Docker images
-
-**Note:** PostgreSQL database is included in the stack - no external database required!
+- **Docker Engine**: 20.10+
+- **Docker Compose**: V2
+- **RAM**: 4GB minimum (8GB recommended)
+- **CPU**: 2 cores minimum
+- **Disk**: 20GB minimum
 
 ---
 
-## 🌟 Features
+## 🔐 Security Notes
 
-### RentalCore
-- Advanced job management
-- Customer database
-- Device inventory tracking
-- Invoice generation
-- Revenue analytics
-- Real-time device availability
-- Category-based organization
-- Job status tracking
-
-### WarehouseCore
-- Physical warehouse mapping
-- Storage zone management
-- Device location tracking
-- LED bin highlighting via MQTT
-- Real-time device movements
-- Integration with RentalCore jobs
-- ESP32-based LED control
-- Maintenance tracking
-
-### Integrated Features
-- **Single Sign-On (SSO)**: Login once, access both systems
-- **Cross-Navigation**: Seamless switching between apps
-- **Shared Database**: Synchronized data across systems
-- **Real-time Updates**: Changes reflect immediately
-- **Mobile-Friendly**: Responsive design for tablets and phones
+- Default admin password must be changed on first login
+- Change database passwords in production!
+- Use HTTPS with a reverse proxy for production
+- MQTT credentials must match ESP32 firmware
 
 ---
 
-## 📞 Support
+**Tsunami Events** - Professional Equipment Rental and Warehouse Management
 
-For issues, questions, or feature requests:
-
-- **RentalCore Issues**: [git.server-nt.de/ntielmann/rentalcore/issues](https://git.server-nt.de/ntielmann/rentalcore/issues)
-- **WarehouseCore Issues**: [git.server-nt.de/ntielmann/warehousecore/issues](https://git.server-nt.de/ntielmann/warehousecore/issues)
-- **Deployment Issues**: [git.server-nt.de/ntielmann/cores/issues](https://git.server-nt.de/ntielmann/cores/issues)
-
----
-
-## 📄 License
-
-This deployment configuration is part of the Tsunami Events management system.
-
-Individual licenses for RentalCore and WarehouseCore are specified in their respective repositories.
-
----
-
-**Tsunami Events** - Professional Equipment Rental and Warehouse Management System
+*Last updated: January 2026*

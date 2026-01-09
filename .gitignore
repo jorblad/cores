@@ -36,3 +36,11 @@ AGENTS.md
 # Migration backups
 migrations/*.backup
 rentalcore/
+
+# AI Agent Files - NEVER COMMIT
+GEMINI.md
+CLAUDE.md
+AGENTS.md
+.claude/
+.gemini/
+*.md.bak

@@ -1,106 +1,29 @@
--- RentalCore PostgreSQL Schema
--- This is a PostgreSQL-compatible version of the RentalCore schema
+-- =============================================================================
+-- RentalCore & WarehouseCore - Combined PostgreSQL Schema
+-- =============================================================================
+-- This script initializes a fresh database for both applications.
+-- It is automatically executed on first Docker Compose startup.
+-- 
+-- Default Admin User: admin / admin (forced to change password on first login)
+-- =============================================================================
 
--- Customers table
-CREATE TABLE IF NOT EXISTS customers (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255),
-    phone VARCHAR(50),
-    address TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
-CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
+-- =============================================================================
+-- PART 1: CORE TABLES (Shared by both applications)
+-- =============================================================================
 
--- Status table
-CREATE TABLE IF NOT EXISTS statuses (
+-- RBAC Roles table (must be created before users for FK reference)
+CREATE TABLE IF NOT EXISTS roles (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
-    color VARCHAR(7) DEFAULT '#007bff'
-);
-CREATE INDEX IF NOT EXISTS idx_statuses_name ON statuses(name);
-
--- Jobs table
-CREATE TABLE IF NOT EXISTS jobs (
-    id SERIAL PRIMARY KEY,
-    customer_id INT NOT NULL REFERENCES customers(id),
-    status_id INT NOT NULL REFERENCES statuses(id),
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    start_date DATE,
-    end_date DATE,
-    revenue DECIMAL(10,2) DEFAULT 0.00,
-    job_code VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL
-);
-CREATE INDEX IF NOT EXISTS idx_jobs_customer ON jobs(customer_id);
-CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status_id);
-CREATE INDEX IF NOT EXISTS idx_jobs_dates ON jobs(start_date, end_date);
-CREATE INDEX IF NOT EXISTS idx_jobs_revenue ON jobs(revenue);
-CREATE INDEX IF NOT EXISTS idx_jobs_title ON jobs(title);
-CREATE INDEX IF NOT EXISTS idx_jobs_deleted_at ON jobs(deleted_at);
-CREATE INDEX IF NOT EXISTS idx_jobs_job_code ON jobs(job_code);
-
--- Devices table
-CREATE TABLE IF NOT EXISTS devices (
-    id SERIAL PRIMARY KEY,
-    serial_no VARCHAR(255) UNIQUE NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    category VARCHAR(100),
-    price DECIMAL(10,2) DEFAULT 0.00,
-    available BOOLEAN DEFAULT TRUE,
-    label_path VARCHAR(512),
+    scope VARCHAR(50) DEFAULT 'global',  -- 'global', 'rentalcore', 'warehousecore'
+    is_system BOOLEAN DEFAULT FALSE,
+    permissions TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_devices_serial ON devices(serial_no);
-CREATE INDEX IF NOT EXISTS idx_devices_name ON devices(name);
-CREATE INDEX IF NOT EXISTS idx_devices_category ON devices(category);
-CREATE INDEX IF NOT EXISTS idx_devices_available ON devices(available);
 
--- Products table
-CREATE TABLE IF NOT EXISTS products (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    category VARCHAR(100),
-    price DECIMAL(10,2) DEFAULT 0.00,
-    active BOOLEAN DEFAULT TRUE,
-    website_visible BOOLEAN DEFAULT FALSE,
-    website_description TEXT,
-    website_image_url VARCHAR(512),
-    website_sort_order INT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
-CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
-CREATE INDEX IF NOT EXISTS idx_products_active ON products(active);
-
--- Job-Device relationship table
-CREATE TABLE IF NOT EXISTS job_devices (
-    id SERIAL PRIMARY KEY,
-    job_id INT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-    device_id INT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-    price DECIMAL(10,2) DEFAULT 0.00,
-    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    removed_at TIMESTAMP NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_job_devices_job ON job_devices(job_id);
-CREATE INDEX IF NOT EXISTS idx_job_devices_device ON job_devices(device_id);
-CREATE INDEX IF NOT EXISTS idx_job_devices_assigned ON job_devices(assigned_at);
-CREATE INDEX IF NOT EXISTS idx_job_devices_removed ON job_devices(removed_at);
-CREATE UNIQUE INDEX IF NOT EXISTS unique_active_assignment ON job_devices(job_id, device_id, removed_at) WHERE removed_at IS NULL;
-
--- Users table (for auth)
+-- Users table (for auth) - shared between both systems
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
@@ -110,6 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_name VARCHAR(100),
     is_admin BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
+    force_password_change BOOLEAN DEFAULT FALSE,
     last_login TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -117,6 +41,18 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active);
+
+-- User Roles junction table
+CREATE TABLE IF NOT EXISTS user_roles (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id INT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    assigned_by INT REFERENCES users(id) ON DELETE SET NULL,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, role_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id);
 
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
@@ -130,33 +66,284 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
--- User preferences table
-CREATE TABLE IF NOT EXISTS user_preferences (
+-- Audit logs table
+CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    preference_key VARCHAR(100) NOT NULL,
-    preference_value TEXT,
+    user_id INT REFERENCES users(id) ON DELETE SET NULL,
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(100),
+    entity_id INT,
+    old_value TEXT,
+    new_value TEXT,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
+
+-- App Settings table (for system configuration)
+CREATE TABLE IF NOT EXISTS app_settings (
+    id SERIAL PRIMARY KEY,
+    scope VARCHAR(50) NOT NULL DEFAULT 'global',  -- 'global', 'rentalcore', 'warehousecore'
+    key VARCHAR(100) NOT NULL,
+    value TEXT,
+    description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, preference_key)
+    UNIQUE(scope, key)
 );
 
--- Cases table (for equipment cases)
-CREATE TABLE IF NOT EXISTS cases (
+-- =============================================================================
+-- PART 2: RENTALCORE TABLES
+-- =============================================================================
+
+-- Customers table
+CREATE TABLE IF NOT EXISTS customers (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    barcode VARCHAR(255),
-    rfid_tag VARCHAR(255),
-    status VARCHAR(50) DEFAULT 'available',
-    zone_id INT,
-    capacity INT,
+    name VARCHAR(255),
+    companyname VARCHAR(255),
+    firstname VARCHAR(100),
+    lastname VARCHAR(100),
+    street VARCHAR(255),
+    housenumber VARCHAR(20),
+    zip VARCHAR(20),
+    city VARCHAR(100),
+    federalstate VARCHAR(100),
+    country VARCHAR(100) DEFAULT 'Deutschland',
+    phonenumber VARCHAR(50),
+    email VARCHAR(255),
+    customertype VARCHAR(50),
+    notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_cases_barcode ON cases(barcode);
+CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
+CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
+CREATE INDEX IF NOT EXISTS idx_customers_companyname ON customers(companyname);
+CREATE INDEX IF NOT EXISTS idx_customers_lastname ON customers(lastname);
+
+-- Status table (for job statuses)
+CREATE TABLE IF NOT EXISTS status (
+    statusid SERIAL PRIMARY KEY,
+    status VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    color VARCHAR(7) DEFAULT '#007bff',
+    sort_order INT DEFAULT 0
+);
+
+-- Job categories table
+CREATE TABLE IF NOT EXISTS jobcategory (
+    jobcategoryid SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    abbreviation VARCHAR(10)
+);
+
+-- Categories for products
+CREATE TABLE IF NOT EXISTS categories (
+    categoryid SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    abbreviation VARCHAR(10)
+);
+
+-- Subcategories for products
+CREATE TABLE IF NOT EXISTS subcategories (
+    subcategoryid VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    abbreviation VARCHAR(10),
+    categoryid INT REFERENCES categories(categoryid) ON DELETE SET NULL
+);
+
+-- Subbiercategories for products (third level)
+CREATE TABLE IF NOT EXISTS subbiercategories (
+    subbiercategoryid VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    abbreviation VARCHAR(10),
+    subcategoryid VARCHAR(50) REFERENCES subcategories(subcategoryid) ON DELETE SET NULL
+);
+
+-- Manufacturers table
+CREATE TABLE IF NOT EXISTS manufacturer (
+    manufacturerid SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    website VARCHAR(255)
+);
+
+-- Brands table
+CREATE TABLE IF NOT EXISTS brands (
+    brandid SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    manufacturerid INT REFERENCES manufacturer(manufacturerid) ON DELETE SET NULL
+);
+
+-- Count types for accessories/consumables
+CREATE TABLE IF NOT EXISTS count_types (
+    count_type_id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    abbreviation VARCHAR(10),
+    is_decimal BOOLEAN DEFAULT FALSE
+);
+
+-- Products table
+CREATE TABLE IF NOT EXISTS products (
+    productid SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    categoryid INT REFERENCES categories(categoryid) ON DELETE SET NULL,
+    subcategoryid VARCHAR(50) REFERENCES subcategories(subcategoryid) ON DELETE SET NULL,
+    subbiercategoryid VARCHAR(50) REFERENCES subbiercategories(subbiercategoryid) ON DELETE SET NULL,
+    "manufacturerID" INT REFERENCES manufacturer(manufacturerid) ON DELETE SET NULL,
+    "brandID" INT REFERENCES brands(brandid) ON DELETE SET NULL,
+    description TEXT,
+    "maintenanceInterval" INT,
+    itemcostperday DECIMAL(10,2) DEFAULT 0.00,
+    weight DECIMAL(10,3),
+    height DECIMAL(10,3),
+    width DECIMAL(10,3),
+    depth DECIMAL(10,3),
+    powerconsumption DECIMAL(10,2),
+    pos_in_category INT,
+    is_accessory BOOLEAN DEFAULT FALSE,
+    is_consumable BOOLEAN DEFAULT FALSE,
+    count_type_id INT REFERENCES count_types(count_type_id) ON DELETE SET NULL,
+    stock_quantity DECIMAL(10,3),
+    min_stock_level DECIMAL(10,3),
+    generic_barcode VARCHAR(100),
+    price_per_unit DECIMAL(10,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(categoryid);
+CREATE INDEX IF NOT EXISTS idx_products_is_accessory ON products(is_accessory);
+CREATE INDEX IF NOT EXISTS idx_products_is_consumable ON products(is_consumable);
+CREATE INDEX IF NOT EXISTS idx_products_generic_barcode ON products(generic_barcode);
+
+-- Devices table
+CREATE TABLE IF NOT EXISTS devices (
+    deviceid VARCHAR(50) PRIMARY KEY,
+    productid INT REFERENCES products(productid) ON DELETE SET NULL,
+    serialnumber VARCHAR(255),
+    purchasedate DATE,
+    lastmaintenance DATE,
+    nextmaintenance DATE,
+    insurancenumber VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'free',
+    insuranceid INT,
+    qr_code VARCHAR(255),
+    current_location VARCHAR(255),
+    gps_latitude DECIMAL(10,7),
+    gps_longitude DECIMAL(10,7),
+    condition_rating DECIMAL(3,1) DEFAULT 5.0,
+    usage_hours DECIMAL(10,2) DEFAULT 0.00,
+    total_revenue DECIMAL(12,2) DEFAULT 0.00,
+    last_maintenance_cost DECIMAL(10,2),
+    notes TEXT,
+    barcode VARCHAR(255),
+    current_zone_id INT,
+    current_case_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_devices_productid ON devices(productid);
+CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status);
+CREATE INDEX IF NOT EXISTS idx_devices_barcode ON devices(barcode);
+CREATE INDEX IF NOT EXISTS idx_devices_serialnumber ON devices(serialnumber);
+
+-- Jobs table
+CREATE TABLE IF NOT EXISTS jobs (
+    jobid SERIAL PRIMARY KEY,
+    job_code VARCHAR(50),
+    customerid INT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    statusid INT NOT NULL REFERENCES status(statusid) ON DELETE RESTRICT,
+    jobcategoryid INT REFERENCES jobcategory(jobcategoryid) ON DELETE SET NULL,
+    description TEXT,
+    discount DECIMAL(10,2) DEFAULT 0.00,
+    discount_type VARCHAR(20) DEFAULT 'amount',
+    revenue DECIMAL(12,2) DEFAULT 0.00,
+    final_revenue DECIMAL(12,2),
+    startdate DATE,
+    enddate DATE,
+    created_by INT REFERENCES users(id) ON DELETE SET NULL,
+    updated_by INT REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_customerid ON jobs(customerid);
+CREATE INDEX IF NOT EXISTS idx_jobs_statusid ON jobs(statusid);
+CREATE INDEX IF NOT EXISTS idx_jobs_dates ON jobs(startdate, enddate);
+CREATE INDEX IF NOT EXISTS idx_jobs_job_code ON jobs(job_code);
+CREATE INDEX IF NOT EXISTS idx_jobs_deleted_at ON jobs(deleted_at);
+
+-- Job-Device relationship table
+CREATE TABLE IF NOT EXISTS job_devices (
+    jobid INT NOT NULL REFERENCES jobs(jobid) ON DELETE CASCADE,
+    deviceid VARCHAR(50) NOT NULL REFERENCES devices(deviceid) ON DELETE CASCADE,
+    custom_price DECIMAL(10,2),
+    package_id INT,
+    is_package_item BOOLEAN DEFAULT FALSE,
+    pack_status VARCHAR(20) DEFAULT 'pending',
+    pack_ts TIMESTAMP,
+    PRIMARY KEY (jobid, deviceid)
+);
+CREATE INDEX IF NOT EXISTS idx_job_devices_jobid ON job_devices(jobid);
+CREATE INDEX IF NOT EXISTS idx_job_devices_deviceid ON job_devices(deviceid);
+CREATE INDEX IF NOT EXISTS idx_job_devices_pack_status ON job_devices(pack_status);
+
+-- Cases table (for equipment cases)
+CREATE TABLE IF NOT EXISTS cases (
+    caseid SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    weight DECIMAL(10,2),
+    width DECIMAL(10,2),
+    height DECIMAL(10,2),
+    depth DECIMAL(10,2),
+    status VARCHAR(50) DEFAULT 'free',
+    barcode VARCHAR(255),
+    zone_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 CREATE INDEX IF NOT EXISTS idx_cases_status ON cases(status);
-CREATE INDEX IF NOT EXISTS idx_cases_zone ON cases(zone_id);
+CREATE INDEX IF NOT EXISTS idx_cases_barcode ON cases(barcode);
+
+-- Devices in Cases junction table
+CREATE TABLE IF NOT EXISTS devicescases (
+    caseid INT NOT NULL REFERENCES cases(caseid) ON DELETE CASCADE,
+    deviceid VARCHAR(50) NOT NULL REFERENCES devices(deviceid) ON DELETE CASCADE,
+    PRIMARY KEY (caseid, deviceid)
+);
+
+-- Cable connectors
+CREATE TABLE IF NOT EXISTS cable_connectors (
+    "cable_connectorsID" SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    abbreviation VARCHAR(20),
+    gender VARCHAR(10)
+);
+
+-- Cable types
+CREATE TABLE IF NOT EXISTS cable_types (
+    "cable_typesID" SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+);
+
+-- Cables table
+CREATE TABLE IF NOT EXISTS cables (
+    "cableID" SERIAL PRIMARY KEY,
+    connector1 INT NOT NULL REFERENCES cable_connectors("cable_connectorsID") ON DELETE RESTRICT,
+    connector2 INT NOT NULL REFERENCES cable_connectors("cable_connectorsID") ON DELETE RESTRICT,
+    typ INT NOT NULL REFERENCES cable_types("cable_typesID") ON DELETE RESTRICT,
+    length DECIMAL(10,2) NOT NULL,
+    mm2 DECIMAL(10,2),
+    name VARCHAR(255)
+);
+CREATE INDEX IF NOT EXISTS idx_cables_connector1 ON cables(connector1);
+CREATE INDEX IF NOT EXISTS idx_cables_connector2 ON cables(connector2);
+CREATE INDEX IF NOT EXISTS idx_cables_type ON cables(typ);
 
 -- Company settings table
 CREATE TABLE IF NOT EXISTS company_settings (
@@ -185,73 +372,37 @@ CREATE TABLE IF NOT EXISTS company_settings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert default statuses
-INSERT INTO statuses (name, description, color) VALUES
-('Planning', 'Job is in planning phase', '#6c757d'),
-('Active', 'Job is currently active', '#28a745'),
-('Completed', 'Job has been completed', '#007bff'),
-('Cancelled', 'Job has been cancelled', '#dc3545'),
-('On Hold', 'Job is temporarily on hold', '#ffc107')
-ON CONFLICT (name) DO NOTHING;
-
--- RBAC Roles table
-CREATE TABLE IF NOT EXISTS roles (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
-    description TEXT,
-    is_system BOOLEAN DEFAULT FALSE,
-    permissions TEXT,
+-- User preferences table
+CREATE TABLE IF NOT EXISTS user_preferences (
+    preference_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    language VARCHAR(10) DEFAULT 'de',
+    theme VARCHAR(20) DEFAULT 'dark',
+    time_zone VARCHAR(50) DEFAULT 'Europe/Berlin',
+    date_format VARCHAR(20) DEFAULT 'DD.MM.YYYY',
+    time_format VARCHAR(10) DEFAULT '24h',
+    email_notifications BOOLEAN DEFAULT TRUE,
+    system_notifications BOOLEAN DEFAULT TRUE,
+    job_status_notifications BOOLEAN DEFAULT TRUE,
+    device_alert_notifications BOOLEAN DEFAULT TRUE,
+    items_per_page INT DEFAULT 25,
+    default_view VARCHAR(20) DEFAULT 'list',
+    show_advanced_options BOOLEAN DEFAULT FALSE,
+    auto_save_enabled BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- User Roles junction table
-CREATE TABLE IF NOT EXISTS user_roles (
-    id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id INT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    assigned_by INT REFERENCES users(id) ON DELETE SET NULL,
-    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, role_id)
-);
-CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id);
-
--- Audit logs table
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id SERIAL PRIMARY KEY,
-    user_id INT REFERENCES users(id) ON DELETE SET NULL,
-    action VARCHAR(100) NOT NULL,
-    entity_type VARCHAR(100),
-    entity_id INT,
-    old_value TEXT,
-    new_value TEXT,
-    ip_address VARCHAR(45),
-    user_agent TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
-CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
-
--- Default admin user (password: admin123 - CHANGE IN PRODUCTION!)
--- Password hash is bcrypt of 'admin123'
-INSERT INTO users (username, email, password_hash, first_name, last_name, is_admin, is_active)
-VALUES ('admin', 'admin@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Admin', 'User', TRUE, TRUE)
-ON CONFLICT (username) DO NOTHING;
-
--- Insert admin role
-INSERT INTO roles (name, description, is_system, permissions) VALUES
-('admin', 'Full system administrator', TRUE, '["*"]'),
-('user', 'Standard user', TRUE, '["read", "write"]'),
-('viewer', 'Read-only access', TRUE, '["read"]')
-ON CONFLICT (name) DO NOTHING;
--- WarehouseCore PostgreSQL Schema
--- This is a PostgreSQL-compatible version of the WarehouseCore additional tables
+-- =============================================================================
+-- PART 3: WAREHOUSECORE TABLES
+-- =============================================================================
 
 -- Storage zone types (simulating ENUM)
-CREATE TYPE zone_type AS ENUM ('shelf', 'rack', 'case', 'vehicle', 'stage', 'warehouse', 'other');
+DO $$ BEGIN
+    CREATE TYPE zone_type AS ENUM ('shelf', 'rack', 'case', 'vehicle', 'stage', 'warehouse', 'other');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Storage Zones table
 CREATE TABLE IF NOT EXISTS storage_zones (
@@ -278,22 +429,18 @@ CREATE INDEX IF NOT EXISTS idx_zone_active ON storage_zones(is_active);
 CREATE INDEX IF NOT EXISTS idx_zone_parent ON storage_zones(parent_zone_id);
 CREATE INDEX IF NOT EXISTS idx_zone_barcode ON storage_zones(barcode);
 
--- Add zone reference to cases table if needed
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'cases' AND column_name = 'zone_id') THEN
-        ALTER TABLE cases ADD COLUMN zone_id INT NULL;
-    END IF;
-END $$;
+-- Add zone reference to devices and cases
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS current_zone_id INT REFERENCES storage_zones(zone_id) ON DELETE SET NULL;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS zone_id INT REFERENCES storage_zones(zone_id) ON DELETE SET NULL;
 
 -- Device movements table
 CREATE TABLE IF NOT EXISTS device_movements (
     movement_id SERIAL PRIMARY KEY,
-    device_id INT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    device_id VARCHAR(50) NOT NULL REFERENCES devices(deviceid) ON DELETE CASCADE,
     from_zone_id INT NULL REFERENCES storage_zones(zone_id) ON DELETE SET NULL,
     to_zone_id INT NULL REFERENCES storage_zones(zone_id) ON DELETE SET NULL,
-    from_case_id INT NULL REFERENCES cases(id) ON DELETE SET NULL,
-    to_case_id INT NULL REFERENCES cases(id) ON DELETE SET NULL,
+    from_case_id INT NULL REFERENCES cases(caseid) ON DELETE SET NULL,
+    to_case_id INT NULL REFERENCES cases(caseid) ON DELETE SET NULL,
     moved_by INT NULL REFERENCES users(id) ON DELETE SET NULL,
     movement_type VARCHAR(50) NOT NULL DEFAULT 'transfer',
     reason TEXT,
@@ -309,9 +456,9 @@ CREATE INDEX IF NOT EXISTS idx_movement_created ON device_movements(created_at);
 -- Scan events table
 CREATE TABLE IF NOT EXISTS scan_events (
     scan_id SERIAL PRIMARY KEY,
-    device_id INT NULL REFERENCES devices(id) ON DELETE SET NULL,
+    device_id VARCHAR(50) NULL REFERENCES devices(deviceid) ON DELETE SET NULL,
     zone_id INT NULL REFERENCES storage_zones(zone_id) ON DELETE SET NULL,
-    case_id INT NULL REFERENCES cases(id) ON DELETE SET NULL,
+    case_id INT NULL REFERENCES cases(caseid) ON DELETE SET NULL,
     scanner_id VARCHAR(100),
     scanned_by INT NULL REFERENCES users(id) ON DELETE SET NULL,
     scan_type VARCHAR(50) NOT NULL DEFAULT 'identify',
@@ -329,7 +476,7 @@ CREATE INDEX IF NOT EXISTS idx_scan_barcode ON scan_events(barcode_value);
 -- Defect reports table
 CREATE TABLE IF NOT EXISTS defect_reports (
     defect_id SERIAL PRIMARY KEY,
-    device_id INT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    device_id VARCHAR(50) NOT NULL REFERENCES devices(deviceid) ON DELETE CASCADE,
     reported_by INT NULL REFERENCES users(id) ON DELETE SET NULL,
     severity VARCHAR(20) NOT NULL DEFAULT 'minor',
     status VARCHAR(20) NOT NULL DEFAULT 'open',
@@ -350,7 +497,9 @@ CREATE INDEX IF NOT EXISTS idx_defect_created ON defect_reports(created_at);
 CREATE TABLE IF NOT EXISTS led_controllers (
     id SERIAL PRIMARY KEY,
     controller_id VARCHAR(100) NOT NULL UNIQUE,
+    display_name VARCHAR(100),
     topic_suffix VARCHAR(100),
+    zone_types TEXT[],
     status_data JSONB,
     is_active BOOLEAN DEFAULT TRUE,
     last_seen TIMESTAMP,
@@ -374,7 +523,7 @@ CREATE TABLE IF NOT EXISTS label_templates (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Product packages table (for website catalog)
+-- Product packages table (for rental bundles)
 CREATE TABLE IF NOT EXISTS product_packages (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -401,7 +550,7 @@ CREATE INDEX IF NOT EXISTS idx_package_website ON product_packages(website_visib
 CREATE TABLE IF NOT EXISTS product_package_items (
     id SERIAL PRIMARY KEY,
     package_id INT NOT NULL REFERENCES product_packages(id) ON DELETE CASCADE,
-    product_id INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    product_id INT NOT NULL REFERENCES products(productid) ON DELETE CASCADE,
     quantity INT DEFAULT 1,
     is_optional BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -409,18 +558,22 @@ CREATE TABLE IF NOT EXISTS product_package_items (
 CREATE INDEX IF NOT EXISTS idx_pkg_item_package ON product_package_items(package_id);
 CREATE INDEX IF NOT EXISTS idx_pkg_item_product ON product_package_items(product_id);
 
--- Product dependencies table
-CREATE TABLE IF NOT EXISTS product_dependencies (
+-- Rental equipment (external rentals from suppliers)
+CREATE TABLE IF NOT EXISTS rental_equipment (
     id SERIAL PRIMARY KEY,
-    product_id INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    required_product_id INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    dependency_type VARCHAR(50) DEFAULT 'requires',
-    quantity INT DEFAULT 1,
+    name VARCHAR(255) NOT NULL,
+    supplier VARCHAR(255),
+    category VARCHAR(100),
+    description TEXT,
+    rental_price DECIMAL(10,2) DEFAULT 0.00,
+    customer_price DECIMAL(10,2) DEFAULT 0.00,
+    is_active BOOLEAN DEFAULT TRUE,
+    notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(product_id, required_product_id)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_dep_product ON product_dependencies(product_id);
-CREATE INDEX IF NOT EXISTS idx_dep_required ON product_dependencies(required_product_id);
+CREATE INDEX IF NOT EXISTS idx_rental_equipment_supplier ON rental_equipment(supplier);
+CREATE INDEX IF NOT EXISTS idx_rental_equipment_active ON rental_equipment(is_active);
 
 -- API Keys table
 CREATE TABLE IF NOT EXISTS api_keys (
@@ -440,25 +593,140 @@ CREATE INDEX IF NOT EXISTS idx_api_key_hash ON api_keys(key_hash);
 CREATE INDEX IF NOT EXISTS idx_api_key_active ON api_keys(is_active);
 CREATE INDEX IF NOT EXISTS idx_api_key_user ON api_keys(user_id);
 
--- Add device current_zone_id column if not exists
-DO $$ 
+-- =============================================================================
+-- PART 4: DEFAULT DATA
+-- =============================================================================
+
+-- Default job statuses
+INSERT INTO status (status, description, color, sort_order) VALUES
+('Planung', 'Job ist in der Planungsphase', '#6c757d', 1),
+('Vorbereitung', 'Job wird vorbereitet', '#17a2b8', 2),
+('Aktiv', 'Job ist aktuell aktiv', '#28a745', 3),
+('Abgeschlossen', 'Job wurde abgeschlossen', '#007bff', 4),
+('Abgerechnet', 'Job wurde abgerechnet', '#6610f2', 5),
+('Storniert', 'Job wurde storniert', '#dc3545', 6),
+('Pausiert', 'Job ist temporär pausiert', '#ffc107', 7)
+ON CONFLICT (status) DO NOTHING;
+
+-- Default RBAC roles
+INSERT INTO roles (name, description, scope, is_system, permissions) VALUES
+-- Global roles
+('super_admin', 'Full access across all systems', 'global', TRUE, '["*"]'),
+-- RentalCore roles
+('admin', 'RentalCore full administration', 'rentalcore', TRUE, '["rentalcore.*"]'),
+('manager', 'Jobs, customers, devices management', 'rentalcore', TRUE, '["rentalcore.jobs.*", "rentalcore.customers.*", "rentalcore.devices.read"]'),
+('operator', 'Operational flows including scanning', 'rentalcore', TRUE, '["rentalcore.jobs.read", "rentalcore.jobs.scan", "rentalcore.devices.read"]'),
+('viewer', 'Read-only access to RentalCore', 'rentalcore', TRUE, '["rentalcore.*.read"]'),
+-- WarehouseCore roles
+('warehouse_admin', 'WarehouseCore full administration', 'warehousecore', TRUE, '["warehousecore.*"]'),
+('warehouse_manager', 'Warehouse operations and reporting', 'warehousecore', TRUE, '["warehousecore.zones.*", "warehousecore.devices.*", "warehousecore.reports.*"]'),
+('warehouse_worker', 'Daily warehouse tasks and scans', 'warehousecore', TRUE, '["warehousecore.devices.read", "warehousecore.devices.scan", "warehousecore.zones.read"]'),
+('warehouse_viewer', 'Read-only warehouse access', 'warehousecore', TRUE, '["warehousecore.*.read"]')
+ON CONFLICT (name) DO NOTHING;
+
+-- Default admin user
+-- Password: 'admin' (bcrypt hash)
+-- IMPORTANT: force_password_change is TRUE - user MUST change password on first login!
+INSERT INTO users (username, email, password_hash, first_name, last_name, is_admin, is_active, force_password_change)
+VALUES ('admin', 'admin@example.com', '$2a$10$rDkP5e0v0xnXmOq2KYchZOqB5.EvXgC49D0RmRR3gv/X.5F5D1qVG', 'System', 'Administrator', TRUE, TRUE, TRUE)
+ON CONFLICT (username) DO NOTHING;
+
+-- Assign all administrative roles to the default admin user
+DO $$
+DECLARE
+    admin_user_id INT;
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'devices' AND column_name = 'current_zone_id') THEN
-        ALTER TABLE devices ADD COLUMN current_zone_id INT NULL REFERENCES storage_zones(zone_id) ON DELETE SET NULL;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'devices' AND column_name = 'current_case_id') THEN
-        ALTER TABLE devices ADD COLUMN current_case_id INT NULL REFERENCES cases(id) ON DELETE SET NULL;
+    SELECT id INTO admin_user_id FROM users WHERE username = 'admin';
+    IF admin_user_id IS NOT NULL THEN
+        INSERT INTO user_roles (user_id, role_id)
+        SELECT admin_user_id, id FROM roles WHERE name IN ('super_admin', 'admin', 'warehouse_admin')
+        ON CONFLICT (user_id, role_id) DO NOTHING;
     END IF;
 END $$;
 
 -- Default storage zones
 INSERT INTO storage_zones (code, name, type, description, is_active) VALUES
-('MAIN-WH', 'Main Warehouse', 'warehouse', 'Primary warehouse location', TRUE),
-('SHELF-A1', 'Shelf A1', 'shelf', 'Shelf section A1', TRUE),
-('STAGE', 'Stage Area', 'stage', 'Event staging area', TRUE)
+('MAIN-WH', 'Hauptlager', 'warehouse', 'Primärer Lagerstandort', TRUE),
+('STAGE', 'Staging-Bereich', 'stage', 'Bereich für Job-Vorbereitung', TRUE)
 ON CONFLICT (code) DO NOTHING;
 
 -- Default label template
 INSERT INTO label_templates (name, description, template_type, width_mm, height_mm, is_default) VALUES
-('Default Device Label', 'Standard device label 62x29mm', 'device', 62, 29, TRUE)
+('Standard Geräte-Label', 'Standard Geräteetikett 62x29mm', 'device', 62, 29, TRUE)
 ON CONFLICT (name) DO NOTHING;
+
+-- Default count types for accessories/consumables
+INSERT INTO count_types (name, abbreviation, is_decimal) VALUES
+('Stück', 'Stk', FALSE),
+('Kilogramm', 'kg', TRUE),
+('Liter', 'L', TRUE),
+('Meter', 'm', TRUE),
+('Quadratmeter', 'm²', TRUE)
+ON CONFLICT (name) DO NOTHING;
+
+-- Default cable connectors
+INSERT INTO cable_connectors (name, abbreviation, gender) VALUES
+('Schuko', 'SCH', 'male'),
+('Schuko Kupplung', 'SCH', 'female'),
+('CEE 16A blau', 'CEE16', 'male'),
+('CEE 16A blau Kupplung', 'CEE16', 'female'),
+('CEE 32A rot', 'CEE32', 'male'),
+('CEE 32A rot Kupplung', 'CEE32', 'female'),
+('CEE 63A rot', 'CEE63', 'male'),
+('CEE 63A rot Kupplung', 'CEE63', 'female'),
+('CEE 125A rot', 'CEE125', 'male'),
+('CEE 125A rot Kupplung', 'CEE125', 'female'),
+('XLR 3-pol', 'XLR3', 'male'),
+('XLR 3-pol Kupplung', 'XLR3', 'female'),
+('XLR 5-pol', 'XLR5', 'male'),
+('XLR 5-pol Kupplung', 'XLR5', 'female'),
+('Powercon', 'PWC', 'male'),
+('Powercon TRUE1', 'PWC1', 'male'),
+('Socapex', 'SOC', 'male'),
+('Socapex Kupplung', 'SOC', 'female'),
+('HAN 16E', 'HAN16', 'male'),
+('HAN 16E Kupplung', 'HAN16', 'female'),
+('speakON 2-pol', 'NL2', 'male'),
+('speakON 4-pol', 'NL4', 'male'),
+('speakON 8-pol', 'NL8', 'male'),
+('Klinke 6.3mm mono', 'TS', 'male'),
+('Klinke 6.3mm stereo', 'TRS', 'male'),
+('RJ45', 'RJ45', 'male'),
+('etherCON', 'eCON', 'male')
+ON CONFLICT DO NOTHING;
+
+-- Default cable types
+INSERT INTO cable_types (name) VALUES
+('Strom'),
+('Audio'),
+('DMX'),
+('Netzwerk'),
+('Video'),
+('Multicore'),
+('Hybrid')
+ON CONFLICT DO NOTHING;
+
+-- Default company settings (empty template)
+INSERT INTO company_settings (company_name, country, currency, default_tax_rate) 
+VALUES ('Meine Firma', 'Deutschland', 'EUR', 19.00)
+ON CONFLICT DO NOTHING;
+
+-- Default LED settings
+INSERT INTO app_settings (scope, key, value, description) VALUES
+('warehousecore', 'led.single_bin.default', '{"color": "#FF7A00", "pattern": "breathe", "intensity": 180}', 'Default LED highlighting settings for single bins')
+ON CONFLICT (scope, key) DO NOTHING;
+
+-- =============================================================================
+-- PART 5: INDEXES AND CONSTRAINTS
+-- =============================================================================
+
+-- Performance indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_jobs_active ON jobs(statusid) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_devices_available ON devices(status) WHERE status = 'free';
+
+-- =============================================================================
+-- INITIALIZATION COMPLETE
+-- =============================================================================
+-- Default login: admin / admin
+-- User will be forced to change password on first login
+-- =============================================================================
