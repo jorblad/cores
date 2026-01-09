@@ -45,14 +45,14 @@ CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active);
 -- User Roles junction table
 CREATE TABLE IF NOT EXISTS user_roles (
     id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
-    role_id INT NOT NULL REFERENCES roles(roleid) ON DELETE CASCADE,
+    userid INT NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    roleid INT NOT NULL REFERENCES roles(roleid) ON DELETE CASCADE,
     assigned_by INT REFERENCES users(userid) ON DELETE SET NULL,
     assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, role_id)
+    UNIQUE(userid, roleid)
 );
-CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(userid);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(roleid);
 
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
@@ -638,9 +638,9 @@ DECLARE
 BEGIN
     SELECT userid INTO admin_user_id FROM users WHERE username = 'admin';
     IF admin_user_id IS NOT NULL THEN
-        INSERT INTO user_roles (user_id, role_id)
+        INSERT INTO user_roles (userid, roleid)
         SELECT admin_user_id, roleid FROM roles WHERE name IN ('super_admin', 'admin', 'warehouse_admin')
-        ON CONFLICT (user_id, role_id) DO NOTHING;
+        ON CONFLICT (userid, roleid) DO NOTHING;
     END IF;
 END $$;
 
