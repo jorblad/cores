@@ -996,8 +996,16 @@ CREATE TABLE IF NOT EXISTS inspection_schedules (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE inspection_schedules
+    ADD COLUMN IF NOT EXISTS product_id INT NULL REFERENCES products(productid) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS inspection_type VARCHAR(50) NOT NULL DEFAULT 'routine',
+    ADD COLUMN IF NOT EXISTS interval_days INT NOT NULL DEFAULT 30,
+    ADD COLUMN IF NOT EXISTS last_inspection TIMESTAMP NULL;
+
 CREATE INDEX IF NOT EXISTS idx_inspection_schedules_next_inspection ON inspection_schedules(next_inspection);
 CREATE INDEX IF NOT EXISTS idx_inspection_schedules_is_active ON inspection_schedules(is_active);
+CREATE INDEX IF NOT EXISTS idx_inspection_schedules_product_id ON inspection_schedules(product_id);
 
 -- Defect reports table
 CREATE TABLE IF NOT EXISTS defect_reports (
