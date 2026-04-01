@@ -22,8 +22,11 @@ for SQL_DIR in "${SQL_DIRS[@]}"; do
     continue
   fi
 
-  # collect and sort .sql files
-  mapfile -t files_sorted < <(ls -1 "$SQL_DIR"/*.sql 2>/dev/null | sort)
+  # collect and sort .sql files (portable for macOS Bash 3.x)
+  files_sorted=()
+  while IFS= read -r file; do
+    files_sorted+=("$file")
+  done < <(ls -1 "$SQL_DIR"/*.sql 2>/dev/null | sort)
   if [ ${#files_sorted[@]} -eq 0 ]; then
     continue
   fi

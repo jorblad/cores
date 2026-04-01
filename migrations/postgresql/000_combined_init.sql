@@ -930,6 +930,19 @@ ON CONFLICT (id) DO NOTHING;
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS current_zone_id INT REFERENCES storage_zones(zone_id) ON DELETE SET NULL;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS zone_id INT REFERENCES storage_zones(zone_id) ON DELETE SET NULL;
 
+-- Product locations table (consumables/accessories by zone)
+CREATE TABLE IF NOT EXISTS product_locations (
+    id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES products(productid) ON DELETE CASCADE,
+    zone_id INT NOT NULL REFERENCES storage_zones(zone_id) ON DELETE CASCADE,
+    quantity NUMERIC(12,3) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (product_id, zone_id)
+);
+CREATE INDEX IF NOT EXISTS idx_product_locations_product ON product_locations(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_locations_zone ON product_locations(zone_id);
+
 -- Device movements table
 CREATE TABLE IF NOT EXISTS device_movements (
     movement_id SERIAL PRIMARY KEY,
@@ -1001,6 +1014,22 @@ CREATE TABLE IF NOT EXISTS defect_reports (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE defect_reports
+    ADD COLUMN IF NOT EXISTS title VARCHAR(200) NOT NULL DEFAULT 'Untitled Defect Report',
+    ADD COLUMN IF NOT EXISTS assigned_to INT NULL REFERENCES users(userid) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS reported_at TIMESTAMP NULL,
+    ADD COLUMN IF NOT EXISTS repair_cost NUMERIC(10,2) NULL,
+    ADD COLUMN IF NOT EXISTS repaired_at TIMESTAMP NULL,
+    ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP NULL,
+    ADD COLUMN IF NOT EXISTS repair_notes TEXT NULL;
+
+UPDATE defect_reports SET reported_at = created_at WHERE reported_at IS NULL;
+
+ALTER TABLE defect_reports
+    ALTER COLUMN reported_at SET NOT NULL,
+    ALTER COLUMN reported_at SET DEFAULT CURRENT_TIMESTAMP;
+
 CREATE INDEX IF NOT EXISTS idx_defect_device ON defect_reports(device_id);
 CREATE INDEX IF NOT EXISTS idx_defect_status ON defect_reports(status);
 CREATE INDEX IF NOT EXISTS idx_defect_severity ON defect_reports(severity);
@@ -1513,147 +1542,159 @@ INSERT INTO cable_types (name) VALUES
 ON CONFLICT DO NOTHING;
 
 -- Default product categories
-INSERT INTO categories (name, abbreviation) VALUES
-('Lighting', 'LT'),
-('Audio', 'AU'),
-('Video', 'VI'),
-('Power Distribution', 'PW'),
-('Cables & Connectors', 'CA'),
-('Rigging & Staging', 'RS'),
-('Backline', 'BL'),
-('Communication', 'CM'),
-('Accessories', 'AC'),
-('ICT & Network', 'ICT')
-ON CONFLICT DO NOTHING;
+INSERT INTO categories (name, abbreviation)
+SELECT v.name, v.abbreviation
+FROM (
+    VALUES
+    ('Lighting', 'LT'),
+    ('Audio', 'AU'),
+    ('Video', 'VI'),
+    ('Power Distribution', 'PW'),
+    ('Cables & Connectors', 'CA'),
+    ('Rigging & Staging', 'RS'),
+    ('Backline', 'BL'),
+    ('Communication', 'CM'),
+    ('Accessories', 'AC'),
+    ('ICT & Network', 'ICT')
+) AS v(name, abbreviation)
+WHERE NOT EXISTS (
+    SELECT 1 FROM categories c WHERE c.abbreviation = v.abbreviation
+);
 
 -- Default product subcategories
 INSERT INTO subcategories (subcategoryid, name, abbreviation, categoryid) VALUES
-('LT-MH',  'Moving Heads',           'MH',  (SELECT categoryid FROM categories WHERE abbreviation = 'LT')),
-('LT-PAR', 'LED Pars',               'PAR', (SELECT categoryid FROM categories WHERE abbreviation = 'LT')),
-('LT-BAR', 'LED Bars & Strips',      'BAR', (SELECT categoryid FROM categories WHERE abbreviation = 'LT')),
-('LT-FSP', 'Followspots',            'FSP', (SELECT categoryid FROM categories WHERE abbreviation = 'LT')),
-('LT-HAZ', 'Hazers & Fog Machines',  'HAZ', (SELECT categoryid FROM categories WHERE abbreviation = 'LT')),
-('LT-STB', 'Strobes',                'STB', (SELECT categoryid FROM categories WHERE abbreviation = 'LT')),
-('LT-CTL', 'Controllers & Dimmers', 'CTL', (SELECT categoryid FROM categories WHERE abbreviation = 'LT')),
-('AU-MIC', 'Microphones',            'MIC', (SELECT categoryid FROM categories WHERE abbreviation = 'AU')),
-('AU-SPA', 'PA Speakers',            'SPA', (SELECT categoryid FROM categories WHERE abbreviation = 'AU')),
-('AU-MON', 'Stage Monitors',         'MON', (SELECT categoryid FROM categories WHERE abbreviation = 'AU')),
-('AU-AMP', 'Amplifiers',             'AMP', (SELECT categoryid FROM categories WHERE abbreviation = 'AU')),
-('AU-MIX', 'Mixing Consoles',        'MIX', (SELECT categoryid FROM categories WHERE abbreviation = 'AU')),
-('AU-WRL', 'Wireless Systems',       'WRL', (SELECT categoryid FROM categories WHERE abbreviation = 'AU')),
-('AU-IEM', 'In-Ear Monitors',        'IEM', (SELECT categoryid FROM categories WHERE abbreviation = 'AU')),
-('AU-LAR', 'Line Arrays',            'LAR', (SELECT categoryid FROM categories WHERE abbreviation = 'AU')),
-('VI-PRJ', 'Projectors',             'PRJ', (SELECT categoryid FROM categories WHERE abbreviation = 'VI')),
-('VI-LED', 'LED Screens',            'LED', (SELECT categoryid FROM categories WHERE abbreviation = 'VI')),
-('VI-MNT', 'Monitors & Displays',    'MNT', (SELECT categoryid FROM categories WHERE abbreviation = 'VI')),
-('VI-SWT', 'Video Switchers',        'SWT', (SELECT categoryid FROM categories WHERE abbreviation = 'VI')),
-('VI-CAM', 'Cameras',                'CAM', (SELECT categoryid FROM categories WHERE abbreviation = 'VI')),
-('VI-MSV', 'Media Servers',          'MSV', (SELECT categoryid FROM categories WHERE abbreviation = 'VI')),
-('PW-DST', 'Distribution Boards',   'DST', (SELECT categoryid FROM categories WHERE abbreviation = 'PW')),
-('PW-GEN', 'Generators',             'GEN', (SELECT categoryid FROM categories WHERE abbreviation = 'PW')),
-('PW-UPS', 'UPS Systems',            'UPS', (SELECT categoryid FROM categories WHERE abbreviation = 'PW')),
-('PW-RLS', 'Cable Reels',            'RLS', (SELECT categoryid FROM categories WHERE abbreviation = 'PW')),
-('CA-PWC', 'Power Cables',           'PWC', (SELECT categoryid FROM categories WHERE abbreviation = 'CA')),
-('CA-AUC', 'Audio Cables',           'AUC', (SELECT categoryid FROM categories WHERE abbreviation = 'CA')),
-('CA-VIC', 'Video Cables',           'VIC', (SELECT categoryid FROM categories WHERE abbreviation = 'CA')),
-('CA-DMX', 'DMX Cables',             'DMX', (SELECT categoryid FROM categories WHERE abbreviation = 'CA')),
-('CA-NTC', 'Network Cables',         'NTC', (SELECT categoryid FROM categories WHERE abbreviation = 'CA')),
-('CA-MCC', 'Multicore',              'MCC', (SELECT categoryid FROM categories WHERE abbreviation = 'CA')),
-('RS-TRS', 'Trussing',               'TRS', (SELECT categoryid FROM categories WHERE abbreviation = 'RS')),
-('RS-CHH', 'Chain Hoists',           'CHH', (SELECT categoryid FROM categories WHERE abbreviation = 'RS')),
-('RS-STA', 'Stands & Tripods',       'STA', (SELECT categoryid FROM categories WHERE abbreviation = 'RS')),
-('RS-PLT', 'Staging Platforms',      'PLT', (SELECT categoryid FROM categories WHERE abbreviation = 'RS')),
-('RS-DRP', 'Drapes & Fabric',        'DRP', (SELECT categoryid FROM categories WHERE abbreviation = 'RS')),
-('BL-GTR', 'Guitars',                'GTR', (SELECT categoryid FROM categories WHERE abbreviation = 'BL')),
-('BL-KEY', 'Keyboards & Synths',     'KEY', (SELECT categoryid FROM categories WHERE abbreviation = 'BL')),
-('BL-DRM', 'Drums & Percussion',     'DRM', (SELECT categoryid FROM categories WHERE abbreviation = 'BL')),
-('BL-AMP', 'Guitar & Bass Amps',     'AMP', (SELECT categoryid FROM categories WHERE abbreviation = 'BL')),
-('CM-INT', 'Intercoms',              'INT', (SELECT categoryid FROM categories WHERE abbreviation = 'CM')),
-('CM-WLK', 'Walkie-Talkies',         'WLK', (SELECT categoryid FROM categories WHERE abbreviation = 'CM')),
-('AC-CAS', 'Cases & Flight Cases',   'CAS', (SELECT categoryid FROM categories WHERE abbreviation = 'AC')),
-('AC-HWT', 'Hardware & Tools',       'HWT', (SELECT categoryid FROM categories WHERE abbreviation = 'AC')),
-('AC-ADP', 'Adapters & Connectors',  'ADP', (SELECT categoryid FROM categories WHERE abbreviation = 'AC')),
-('ICT-NSW','Network Switches',       'NSW', (SELECT categoryid FROM categories WHERE abbreviation = 'ICT')),
-('ICT-RAP','Routers & Access Points','RAP', (SELECT categoryid FROM categories WHERE abbreviation = 'ICT')),
-('ICT-SRV','Servers & Compute',      'SRV', (SELECT categoryid FROM categories WHERE abbreviation = 'ICT'))
+('LT-MH',  'Moving Heads',           'MH',  (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'LT')),
+('LT-PAR', 'LED Pars',               'PAR', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'LT')),
+('LT-BAR', 'LED Bars & Strips',      'BAR', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'LT')),
+('LT-FSP', 'Followspots',            'FSP', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'LT')),
+('LT-HAZ', 'Hazers & Fog Machines',  'HAZ', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'LT')),
+('LT-STB', 'Strobes',                'STB', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'LT')),
+('LT-CTL', 'Controllers & Dimmers', 'CTL', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'LT')),
+('AU-MIC', 'Microphones',            'MIC', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AU')),
+('AU-SPA', 'PA Speakers',            'SPA', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AU')),
+('AU-MON', 'Stage Monitors',         'MON', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AU')),
+('AU-AMP', 'Amplifiers',             'AMP', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AU')),
+('AU-MIX', 'Mixing Consoles',        'MIX', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AU')),
+('AU-WRL', 'Wireless Systems',       'WRL', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AU')),
+('AU-IEM', 'In-Ear Monitors',        'IEM', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AU')),
+('AU-LAR', 'Line Arrays',            'LAR', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AU')),
+('VI-PRJ', 'Projectors',             'PRJ', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'VI')),
+('VI-LED', 'LED Screens',            'LED', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'VI')),
+('VI-MNT', 'Monitors & Displays',    'MNT', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'VI')),
+('VI-SWT', 'Video Switchers',        'SWT', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'VI')),
+('VI-CAM', 'Cameras',                'CAM', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'VI')),
+('VI-MSV', 'Media Servers',          'MSV', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'VI')),
+('PW-DST', 'Distribution Boards',   'DST', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'PW')),
+('PW-GEN', 'Generators',             'GEN', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'PW')),
+('PW-UPS', 'UPS Systems',            'UPS', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'PW')),
+('PW-RLS', 'Cable Reels',            'RLS', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'PW')),
+('CA-PWC', 'Power Cables',           'PWC', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'CA')),
+('CA-AUC', 'Audio Cables',           'AUC', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'CA')),
+('CA-VIC', 'Video Cables',           'VIC', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'CA')),
+('CA-DMX', 'DMX Cables',             'DMX', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'CA')),
+('CA-NTC', 'Network Cables',         'NTC', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'CA')),
+('CA-MCC', 'Multicore',              'MCC', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'CA')),
+('RS-TRS', 'Trussing',               'TRS', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'RS')),
+('RS-CHH', 'Chain Hoists',           'CHH', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'RS')),
+('RS-STA', 'Stands & Tripods',       'STA', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'RS')),
+('RS-PLT', 'Staging Platforms',      'PLT', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'RS')),
+('RS-DRP', 'Drapes & Fabric',        'DRP', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'RS')),
+('BL-GTR', 'Guitars',                'GTR', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'BL')),
+('BL-KEY', 'Keyboards & Synths',     'KEY', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'BL')),
+('BL-DRM', 'Drums & Percussion',     'DRM', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'BL')),
+('BL-AMP', 'Guitar & Bass Amps',     'AMP', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'BL')),
+('CM-INT', 'Intercoms',              'INT', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'CM')),
+('CM-WLK', 'Walkie-Talkies',         'WLK', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'CM')),
+('AC-CAS', 'Cases & Flight Cases',   'CAS', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AC')),
+('AC-HWT', 'Hardware & Tools',       'HWT', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AC')),
+('AC-ADP', 'Adapters & Connectors',  'ADP', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'AC')),
+('ICT-NSW','Network Switches',       'NSW', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'ICT')),
+('ICT-RAP','Routers & Access Points','RAP', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'ICT')),
+('ICT-SRV','Servers & Compute',      'SRV', (SELECT MIN(categoryid) FROM categories WHERE abbreviation = 'ICT'))
 ON CONFLICT (subcategoryid) DO NOTHING;
 
 -- Default manufacturers
-INSERT INTO manufacturer (name, website) VALUES
-('Shure',                  'https://www.shure.com'),
-('Sennheiser',              'https://www.sennheiser.com'),
-('d&b audiotechnik',        'https://www.dbaudio.com'),
-('L-Acoustics',             'https://www.l-acoustics.com'),
-('JBL Professional',        'https://jblpro.com'),
-('Yamaha',                  'https://usa.yamaha.com'),
-('QSC',                     'https://www.qsc.com'),
-('Crown International',     'https://www.crownaudio.com'),
-('Martin by Harman',        'https://www.martin.com'),
-('Robe Lighting',           'https://www.robe.cz'),
-('Chauvet Professional',    'https://www.chauvetprofessional.com'),
-('ETC',                     'https://www.etcconnect.com'),
-('GLP',                     'https://www.glp.de'),
-('Ayrton',                  'https://www.ayrton.eu'),
-('Claypaky',                'https://www.claypaky.it'),
-('Elation Professional',    'https://www.elationlighting.com'),
-('DiGiCo',                  'https://www.digico.biz'),
-('Midas',                   'https://www.midasconsoles.com'),
-('Allen & Heath',           'https://www.allen-heath.com'),
-('Roland',                  'https://www.roland.com'),
-('Blackmagic Design',       'https://www.blackmagicdesign.com'),
-('Panasonic',               'https://www.panasonic.com'),
-('Sony',                    'https://pro.sony'),
-('Christie',                'https://www.christiedigital.com'),
-('Barco',                   'https://www.barco.com'),
-('Prolyte Group',           'https://www.prolyte.com'),
-('Global Truss',            'https://www.global-truss.com'),
-('Neutrik',                 'https://www.neutrik.com'),
-('Amphenol',                'https://www.amphenol.com'),
-('Obsidian Control Systems','https://www.obsidiancontrol.com'),
-('MA Lighting',             'https://www.malighting.com'),
-('Avolites',                'https://www.avolites.com')
-ON CONFLICT DO NOTHING;
+INSERT INTO manufacturer (name, website)
+SELECT v.name, v.website
+FROM (
+    VALUES
+    ('Shure',                  'https://www.shure.com'),
+    ('Sennheiser',              'https://www.sennheiser.com'),
+    ('d&b audiotechnik',        'https://www.dbaudio.com'),
+    ('L-Acoustics',             'https://www.l-acoustics.com'),
+    ('JBL Professional',        'https://jblpro.com'),
+    ('Yamaha',                  'https://usa.yamaha.com'),
+    ('QSC',                     'https://www.qsc.com'),
+    ('Crown International',     'https://www.crownaudio.com'),
+    ('Martin by Harman',        'https://www.martin.com'),
+    ('Robe Lighting',           'https://www.robe.cz'),
+    ('Chauvet Professional',    'https://www.chauvetprofessional.com'),
+    ('ETC',                     'https://www.etcconnect.com'),
+    ('GLP',                     'https://www.glp.de'),
+    ('Ayrton',                  'https://www.ayrton.eu'),
+    ('Claypaky',                'https://www.claypaky.it'),
+    ('Elation Professional',    'https://www.elationlighting.com'),
+    ('DiGiCo',                  'https://www.digico.biz'),
+    ('Midas',                   'https://www.midasconsoles.com'),
+    ('Allen & Heath',           'https://www.allen-heath.com'),
+    ('Roland',                  'https://www.roland.com'),
+    ('Blackmagic Design',       'https://www.blackmagicdesign.com'),
+    ('Panasonic',               'https://www.panasonic.com'),
+    ('Sony',                    'https://pro.sony'),
+    ('Christie',                'https://www.christiedigital.com'),
+    ('Barco',                   'https://www.barco.com'),
+    ('Prolyte Group',           'https://www.prolyte.com'),
+    ('Global Truss',            'https://www.global-truss.com'),
+    ('Neutrik',                 'https://www.neutrik.com'),
+    ('Amphenol',                'https://www.amphenol.com'),
+    ('Obsidian Control Systems','https://www.obsidiancontrol.com'),
+    ('MA Lighting',             'https://www.malighting.com'),
+    ('Avolites',                'https://www.avolites.com')
+) AS v(name, website)
+WHERE NOT EXISTS (
+    SELECT 1 FROM manufacturer m WHERE m.name = v.name
+);
 
 -- Default brands
 INSERT INTO brands (name, manufacturerid) VALUES
-('Shure',              (SELECT manufacturerid FROM manufacturer WHERE name = 'Shure')),
-('Sennheiser',         (SELECT manufacturerid FROM manufacturer WHERE name = 'Sennheiser')),
-('Neumann',            (SELECT manufacturerid FROM manufacturer WHERE name = 'Sennheiser')),
-('d&b audiotechnik',   (SELECT manufacturerid FROM manufacturer WHERE name = 'd&b audiotechnik')),
-('L-Acoustics',        (SELECT manufacturerid FROM manufacturer WHERE name = 'L-Acoustics')),
-('JBL Professional',   (SELECT manufacturerid FROM manufacturer WHERE name = 'JBL Professional')),
-('JBL',                (SELECT manufacturerid FROM manufacturer WHERE name = 'JBL Professional')),
-('Yamaha',             (SELECT manufacturerid FROM manufacturer WHERE name = 'Yamaha')),
-('Nexo',               (SELECT manufacturerid FROM manufacturer WHERE name = 'Yamaha')),
-('QSC',                (SELECT manufacturerid FROM manufacturer WHERE name = 'QSC')),
-('Crown',              (SELECT manufacturerid FROM manufacturer WHERE name = 'Crown International')),
-('Martin',             (SELECT manufacturerid FROM manufacturer WHERE name = 'Martin by Harman')),
-('Robe',               (SELECT manufacturerid FROM manufacturer WHERE name = 'Robe Lighting')),
-('Chauvet Professional',(SELECT manufacturerid FROM manufacturer WHERE name = 'Chauvet Professional')),
-('Chauvet DJ',         (SELECT manufacturerid FROM manufacturer WHERE name = 'Chauvet Professional')),
-('ETC',                (SELECT manufacturerid FROM manufacturer WHERE name = 'ETC')),
-('GLP',                (SELECT manufacturerid FROM manufacturer WHERE name = 'GLP')),
-('Ayrton',             (SELECT manufacturerid FROM manufacturer WHERE name = 'Ayrton')),
-('Claypaky',           (SELECT manufacturerid FROM manufacturer WHERE name = 'Claypaky')),
-('Elation',            (SELECT manufacturerid FROM manufacturer WHERE name = 'Elation Professional')),
-('DiGiCo',             (SELECT manufacturerid FROM manufacturer WHERE name = 'DiGiCo')),
-('Midas',              (SELECT manufacturerid FROM manufacturer WHERE name = 'Midas')),
-('Allen & Heath',      (SELECT manufacturerid FROM manufacturer WHERE name = 'Allen & Heath')),
-('Roland',             (SELECT manufacturerid FROM manufacturer WHERE name = 'Roland')),
-('BOSS',               (SELECT manufacturerid FROM manufacturer WHERE name = 'Roland')),
-('Blackmagic Design',  (SELECT manufacturerid FROM manufacturer WHERE name = 'Blackmagic Design')),
-('ATEM',               (SELECT manufacturerid FROM manufacturer WHERE name = 'Blackmagic Design')),
-('Panasonic',          (SELECT manufacturerid FROM manufacturer WHERE name = 'Panasonic')),
-('Sony',               (SELECT manufacturerid FROM manufacturer WHERE name = 'Sony')),
-('Christie',           (SELECT manufacturerid FROM manufacturer WHERE name = 'Christie')),
-('Barco',              (SELECT manufacturerid FROM manufacturer WHERE name = 'Barco')),
-('Prolyte',            (SELECT manufacturerid FROM manufacturer WHERE name = 'Prolyte Group')),
-('Global Truss',       (SELECT manufacturerid FROM manufacturer WHERE name = 'Global Truss')),
-('Neutrik',            (SELECT manufacturerid FROM manufacturer WHERE name = 'Neutrik')),
-('Amphenol',           (SELECT manufacturerid FROM manufacturer WHERE name = 'Amphenol')),
-('Onyx',               (SELECT manufacturerid FROM manufacturer WHERE name = 'Obsidian Control Systems')),
-('grandMA',            (SELECT manufacturerid FROM manufacturer WHERE name = 'MA Lighting')),
-('Avolites',           (SELECT manufacturerid FROM manufacturer WHERE name = 'Avolites'))
+('Shure',              (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Shure')),
+('Sennheiser',         (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Sennheiser')),
+('Neumann',            (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Sennheiser')),
+('d&b audiotechnik',   (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'd&b audiotechnik')),
+('L-Acoustics',        (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'L-Acoustics')),
+('JBL Professional',   (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'JBL Professional')),
+('JBL',                (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'JBL Professional')),
+('Yamaha',             (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Yamaha')),
+('Nexo',               (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Yamaha')),
+('QSC',                (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'QSC')),
+('Crown',              (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Crown International')),
+('Martin',             (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Martin by Harman')),
+('Robe',               (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Robe Lighting')),
+('Chauvet Professional',(SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Chauvet Professional')),
+('Chauvet DJ',         (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Chauvet Professional')),
+('ETC',                (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'ETC')),
+('GLP',                (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'GLP')),
+('Ayrton',             (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Ayrton')),
+('Claypaky',           (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Claypaky')),
+('Elation',            (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Elation Professional')),
+('DiGiCo',             (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'DiGiCo')),
+('Midas',              (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Midas')),
+('Allen & Heath',      (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Allen & Heath')),
+('Roland',             (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Roland')),
+('BOSS',               (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Roland')),
+('Blackmagic Design',  (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Blackmagic Design')),
+('ATEM',               (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Blackmagic Design')),
+('Panasonic',          (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Panasonic')),
+('Sony',               (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Sony')),
+('Christie',           (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Christie')),
+('Barco',              (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Barco')),
+('Prolyte',            (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Prolyte Group')),
+('Global Truss',       (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Global Truss')),
+('Neutrik',            (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Neutrik')),
+('Amphenol',           (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Amphenol')),
+('Onyx',               (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Obsidian Control Systems')),
+('grandMA',            (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'MA Lighting')),
+('Avolites',           (SELECT MIN(manufacturerid) FROM manufacturer WHERE name = 'Avolites'))
 ON CONFLICT DO NOTHING;
 
 -- Default company settings (empty template)
