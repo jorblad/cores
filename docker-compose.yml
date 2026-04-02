@@ -30,7 +30,7 @@ services:
   # RentalCore - Rental Management System (PostgreSQL)
   # ============================================================================
   rentalcore:
-    image: nobentie/rentalcore:latest
+    image: ghcr.io/sj-tech-sweden/rentalcore:0.0.5
     container_name: rentalcore
     restart: unless-stopped
     depends_on:
@@ -75,7 +75,7 @@ services:
   # WarehouseCore - Warehouse Management System (PostgreSQL)
   # ============================================================================
   warehousecore:
-    image: nobentie/warehousecore:latest
+    image: ghcr.io/sj-tech-sweden/warehousecore:0.1.0
     container_name: warehousecore
     restart: unless-stopped
     depends_on:
