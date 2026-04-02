@@ -517,6 +517,19 @@ CREATE TABLE IF NOT EXISTS job_packages (
 CREATE INDEX IF NOT EXISTS idx_job_packages_job ON job_packages(job_id);
 CREATE INDEX IF NOT EXISTS idx_job_packages_added_at ON job_packages(added_at);
 
+-- Job product requirements (products needed for a job without pre-assigning specific devices)
+CREATE TABLE IF NOT EXISTS job_product_requirements (
+    requirement_id SERIAL PRIMARY KEY,
+    job_id         INT NOT NULL,
+    product_id     INT NOT NULL,
+    quantity       INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    CONSTRAINT fk_jpr_job     FOREIGN KEY (job_id)     REFERENCES jobs(jobid)         ON DELETE CASCADE,
+    CONSTRAINT fk_jpr_product FOREIGN KEY (product_id) REFERENCES products(productid) ON DELETE CASCADE,
+    CONSTRAINT uq_jpr_job_product UNIQUE (job_id, product_id)
+);
+CREATE INDEX IF NOT EXISTS idx_jpr_job_id     ON job_product_requirements (job_id);
+CREATE INDEX IF NOT EXISTS idx_jpr_product_id ON job_product_requirements (product_id);
+
 -- Job attachments
 CREATE TABLE IF NOT EXISTS job_attachments (
     attachment_id SERIAL PRIMARY KEY,
