@@ -1,7 +1,9 @@
 -- Migration: Add job_product_requirements table
--- Description: Stores the required quantity of each product for a job without
---              pre-assigning specific devices. Actual device assignment happens
---              in warehousecore when scanning.
+-- Description: Creates the product-level requirements table for jobs. This
+--              migration stores the required quantity of each product without
+--              pre-assigning specific devices; actual device assignment happens
+--              later in WarehouseCore during scanning. The filename is legacy,
+--              but the schema object created here is job_product_requirements.
 
 CREATE TABLE IF NOT EXISTS job_product_requirements (
     requirement_id SERIAL PRIMARY KEY,
@@ -13,5 +15,4 @@ CREATE TABLE IF NOT EXISTS job_product_requirements (
     CONSTRAINT uq_jpr_job_product UNIQUE (job_id, product_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_jpr_job_id     ON job_product_requirements (job_id);
 CREATE INDEX IF NOT EXISTS idx_jpr_product_id ON job_product_requirements (product_id);
