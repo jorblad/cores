@@ -903,7 +903,7 @@ INSERT INTO cable_connectors (cable_connectorsID, name, abbreviation, gender) VA
 (1002,'XLR 3P',NULL,'male'),
 (1003,'XLR 3P',NULL,'female'),
 (1004,'PowerCon In','PC - In',NULL),
-(1005,'Powercon Out','PC - Out',NULL),
+(1005,'PowerCon Out','PC - Out',NULL),
 (1006,'Schutzkontaktstecker','Schuko','female'),
 (1007,'HDMI',NULL,NULL),
 (1008,'Displayport','DP',NULL),
