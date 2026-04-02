@@ -2,7 +2,7 @@
 
 Repository: [https://github.com/sj-tech-sweden/cores](https://github.com/sj-tech-sweden/cores)
 
-**Complete Docker-based deployment for RentalCore and WarehouseCore**
+## Complete Docker-based deployment for RentalCore and WarehouseCore
 
 An integrated equipment rental and warehouse management solution for professional event technology companies.
 
@@ -28,7 +28,8 @@ An integrated equipment rental and warehouse management solution for professiona
 This repository contains the **deployment configuration** for the Tsunami Events core management systems.
 Deploy both applications on any server with a single `docker compose up -d` command.
 
-### **RentalCore** - Job & Customer Management
+### RentalCore - Job & Customer Management
+
 - Equipment rental management and job tracking
 - Customer database with complete history
 - Invoice generation and revenue analytics
@@ -36,10 +37,11 @@ Deploy both applications on any server with a single `docker compose up -d` comm
 - PDF processing with OCR and intelligent product mapping
 
 **Repository:** [github.com/sj-tech-sweden/rentalcore](https://github.com/sj-tech-sweden/rentalcore)
-**Docker Image:** `nobentie/rentalcore:5.3.0` (`latest`)
+**Docker Image:** `ghcr.io/sj-tech-sweden/rentalcore:0.0.5`
 **Port:** 8081
 
-### **WarehouseCore** - Warehouse Management
+### WarehouseCore - Warehouse Management
+
 - Physical warehouse mapping with zone management
 - Device location tracking and movement history
 - LED bin highlighting via MQTT (ESP32-based)
@@ -47,10 +49,11 @@ Deploy both applications on any server with a single `docker compose up -d` comm
 - Case and cable management
 
 **Repository:** [github.com/sj-tech-sweden/warehousecore](https://github.com/sj-tech-sweden/warehousecore)
-**Docker Image:** `nobentie/warehousecore:5.8.0` (`latest`)
+**Docker Image:** `ghcr.io/sj-tech-sweden/warehousecore:0.1.0`
 **Port:** 8082
 
-### **Shared Components**
+### Shared Components
+
 - **PostgreSQL** - Shared database (auto-initialized)
 - **Mosquitto MQTT** - LED control broker (included)
 - **Automatic Backups** - Daily database backups with retention
@@ -69,37 +72,41 @@ Deploy both applications on any server with a single `docker compose up -d` comm
 ### Installation (3 Steps)
 
 1. **Clone this repository:**
+
 ```bash
 git clone https://github.com/sj-tech-sweden/cores.git
 cd cores
 ```
 
-2. **Create configuration file:**
+1. **Create configuration file:**
+
 ```bash
 cp .env.example .env
 # Optional: Edit .env to change passwords (recommended for production)
 ```
 
-3. **Start the complete stack:**
+1. **Start the complete stack:**
+
 ```bash
 docker compose up -d
 ```
 
 **Wait 1-2 minutes** for the database to initialize, then access:
-- **RentalCore**: http://localhost:8081
-- **WarehouseCore**: http://localhost:8082
+
+- **RentalCore**: <http://localhost:8081>
+- **WarehouseCore**: <http://localhost:8082>
 
 ### Default Login
 
 | Username | Password | Notes |
-|----------|----------|-------|
-| `admin`  | `admin`  | **You will be forced to change the password on first login!** |
+| :--- | :--- | :--- |
+| `admin` | `admin` | **You will be forced to change the password on first login!** |
 
 ---
 
 ## 🏗️ System Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Tsunami Events Stack                      │
 └─────────────────────────────────────────────────────────────┘
@@ -192,22 +199,34 @@ docker compose up -d
 ### Production with Subdomains
 
 1. Configure DNS:
-   - `rent.example.com` → Your Server IP
+   - `rent.example.com` → Your Server IP  
    - `warehouse.example.com` → Your Server IP
 
-2. Set `.env`:
+1. Set `.env`:
+
 ```env
 RENTALCORE_DOMAIN=rent.example.com
 WAREHOUSECORE_DOMAIN=warehouse.example.com
 COOKIE_DOMAIN=.example.com
 ```
 
-3. Use nginx reverse proxy (see `nginx-reverse-proxy.conf`)
+1. Use nginx reverse proxy (see `nginx-reverse-proxy.conf`)
 
-4. Add SSL with Let's Encrypt:
-```bash
-sudo certbot --nginx -d rent.example.com -d warehouse.example.com
-```
+1. Add SSL with Let's Encrypt:
+
+   - Install Certbot and its nginx plugin (see your distro docs), for example on Debian/Ubuntu:
+     ```bash
+     sudo apt-get update
+     sudo apt-get install certbot python3-certbot-nginx
+     ```
+   - Obtain and install certificates for your subdomains:
+     ```bash
+     sudo certbot --nginx -d rent.example.com -d warehouse.example.com
+     ```
+   - Follow the prompts to configure HTTPS and automatic redirection. Certbot will also set up automatic renewal via `systemd`/cron; you can test it with:
+     ```bash
+     sudo certbot renew --dry-run
+     ```
 
 ---
 
@@ -218,7 +237,7 @@ sudo certbot --nginx -d rent.example.com -d warehouse.example.com
 Created automatically on first database initialization:
 
 | Field | Value |
-|-------|-------|
+| :--- | :--- |
 | Username | `admin` |
 | Password | `admin` |
 | Email | `admin@example.com` |
@@ -229,7 +248,7 @@ Created automatically on first database initialization:
 ### Role Hierarchy
 
 | Role | Scope | Description |
-|------|-------|-------------|
+| :--- | :--- | :--- |
 | `super_admin` | Global | Full access to both systems |
 | `admin` | RentalCore | RentalCore administration |
 | `manager` | RentalCore | Jobs, customers, devices management |
@@ -280,8 +299,8 @@ curl http://localhost:8082/health
 
 ### Current Versions
 
-- **RentalCore:** 5.3.0 (January 2026)
-- **WarehouseCore:** 5.8.0 (January 2026)
+- **RentalCore:** 0.0.5 (April 2026)
+- **WarehouseCore:** 0.1.0 (April 2026)
 
 ### Update to Latest
 
@@ -311,7 +330,6 @@ docker compose exec -T postgres psql -U rentalcore rentalcore < backup.sql
 This repository now ships a dedicated migration image that runs all SQL files in
 `migrations/postgresql` exactly once, tracked in `schema_migrations`.
 
-- Docker build file: `Dockerfile.migrations`
 - Runtime script: `scripts/k8s/run_migrations.sh`
 - Release workflow: `.github/workflows/release-migrations-on-merge-label.yml`
 - Label check workflow: `.github/workflows/require-release-label.yml`
@@ -321,8 +339,8 @@ Release behavior:
 - Merged PR with label `patch`, `minor`, or `major` creates a new semantic tag.
 - A GitHub Release is created from that tag.
 - Migration image is pushed to GHCR as:
-   - `ghcr.io/<owner>/cores-migrations:<version>`
-   - `ghcr.io/<owner>/cores-migrations:latest`
+  - `ghcr.io/<owner>/cores-migrations:<version>`
+  - `ghcr.io/<owner>/cores-migrations:latest`
 
 Manual local build example:
 
@@ -353,18 +371,22 @@ Kubernetes example job:
 ### First Start Issues
 
 **1. Services restarting continuously?**
+
 - Normal during first start! PostgreSQL needs 30-60 seconds to initialize.
 - Monitor: `docker compose logs -f postgres`
 - Wait for: "database system is ready to accept connections"
 
 **2. Can't login with admin/admin?**
+
 - Existing volume won't reinitialize. Reset with:
+
 ```bash
 docker compose down -v  # ⚠️ DELETES ALL DATA!
 docker compose up -d
 ```
 
 **3. Port already in use?**
+
 ```bash
 sudo lsof -i :8081
 sudo lsof -i :8082
@@ -396,8 +418,8 @@ docker compose pull
 
 ### Docker Images
 
-- **RentalCore**: [hub.docker.com/r/nobentie/rentalcore](https://hub.docker.com/r/nobentie/rentalcore)
-- **WarehouseCore**: [hub.docker.com/r/nobentie/warehousecore](https://hub.docker.com/r/nobentie/warehousecore)
+- **RentalCore**: [github.com/orgs/sj-tech-sweden/packages/container/package/rentalcore](https://github.com/orgs/sj-tech-sweden/packages/container/package/rentalcore)
+- **WarehouseCore**: [github.com/orgs/sj-tech-sweden/packages/container/package/warehousecore](https://github.com/orgs/sj-tech-sweden/packages/container/package/warehousecore)
 
 ### Documentation
 
@@ -426,6 +448,8 @@ docker compose pull
 
 ---
 
+## Timestamp
+
 **Tsunami Events** - Professional Equipment Rental and Warehouse Management
 
-*Last updated: January 2026*
+Last updated: April 2026

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":separateMajorReleases"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "docker-compose": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchManagers": [
+        "docker-compose",
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "docker"
+      ],
+      "groupName": "docker images",
+      "groupSlug": "docker-images"
+    },
+    {
+      "matchPackageNames": [
+        "ghcr.io/sj-tech-sweden/rentalcore",
+        "ghcr.io/sj-tech-sweden/warehousecore"
+      ],
+      "automerge": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": [
+        "(^|/)README\\.md$"
+      ],
+      "matchStrings": [
+        "\\*\\*Docker Image:\\*\\* `(?<depName>ghcr\\.io/sj-tech-sweden/rentalcore):(?<currentValue>[^`]+)`",
+        "\\*\\*Docker Image:\\*\\* `(?<depName>ghcr\\.io/sj-tech-sweden/warehousecore):(?<currentValue>[^`]+)`"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    }
+  ]
+}
