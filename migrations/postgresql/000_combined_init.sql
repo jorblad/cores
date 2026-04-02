@@ -756,7 +756,7 @@ CREATE INDEX IF NOT EXISTS idx_cables_type ON cables(typ);
 
 -- Ensure connector uniqueness to make seeding idempotent across runs
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_cable_connectors
-    ON cable_connectors(name, abbreviation NULLS NOT DISTINCT, gender NULLS NOT DISTINCT);
+    ON cable_connectors(name, abbreviation, gender);
 -- Ensure cable types are unique to avoid duplicate seeds
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_cable_types ON cable_types(name);
 
