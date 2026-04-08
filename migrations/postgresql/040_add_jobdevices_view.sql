@@ -85,16 +85,16 @@ CREATE TRIGGER tr_jobdevices_update
     FOR EACH ROW EXECUTE FUNCTION jobdevices_instead_update();
 
 -- ---------------------------------------------------------------------------
--- 2. Seed missing warehousecore app_settings
+-- 2. Seed missing shared app_settings
 -- ---------------------------------------------------------------------------
 
--- Currency symbol (queried every 15 s by GetCurrencySymbol; missing row fills
--- logs with noisy "record not found" warnings).
+-- Currency symbol is stored in the canonical global scope for both services.
+-- Seeding it here avoids noisy "record not found" warnings when queried.
 INSERT INTO app_settings (scope, key, value, description)
 VALUES (
-    'warehousecore',
+    'global',
     'app.currency',
     '{"symbol": "€"}',
-    'Currency symbol displayed in WarehouseCore UI'
+    'Currency symbol displayed in the UI'
 )
 ON CONFLICT (scope, key) DO NOTHING;
