@@ -1,9 +1,10 @@
 -- Migration: app_settings currency seed
--- Description: Seeds the default currency symbol for WarehouseCore.
---              WarehouseCore queries scope='warehousecore', key='app.currency'
---              and expects a JSON object with a "symbol" key.
---              The app_settings table already exists (000_combined_init.sql).
+-- Description: Seeds the default currency symbol in the shared global scope.
+--              Both RentalCore and WarehouseCore read/write currency from
+--              scope='global', key='app.currency' so the setting is shared
+--              between services. The app_settings table already exists
+--              (000_combined_init.sql).
 
 INSERT INTO app_settings (scope, key, value, description)
-VALUES ('warehousecore', 'app.currency', '{"symbol": "€"}', 'Currency symbol displayed in WarehouseCore UI')
+VALUES ('global', 'app.currency', '{"symbol": "€"}', 'Currency symbol shared between RentalCore and WarehouseCore')
 ON CONFLICT (scope, key) DO NOTHING;

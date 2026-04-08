@@ -1787,8 +1787,7 @@ ON CONFLICT (scope, key) DO NOTHING;
 
 -- Default currency symbol settings
 INSERT INTO app_settings (scope, key, value, description) VALUES
-    ('global',        'app.currency', '{"symbol": "€"}', 'Canonical shared currency symbol setting'),
-    ('warehousecore', 'app.currency', '{"symbol": "€"}', 'Currency symbol displayed in WarehouseCore UI')
+    ('global', 'app.currency', '{"symbol": "€"}', 'Canonical shared currency symbol setting')
 ON CONFLICT (scope, key) DO NOTHING;
 
 -- Default LED job highlight settings
