@@ -2,18 +2,24 @@
 -- Description: Both RentalCore and WarehouseCore now read/write currency from
 --              scope='global' so the setting is truly shared between services.
 --              This migration promotes the existing warehousecore-scoped row to
---              global (if present), then seeds a default if neither exists.
+--              global (if absent), then seeds/normalizes the default if needed.
 
--- 1. Promote existing warehousecore currency to global scope.
-INSERT INTO app_settings (scope, key, value, description)
-SELECT 'global', key, value, description
+-- 1. Promote existing warehousecore currency to global scope only when global is missing.
+--    If a global value already exists, preserve it as the source of truth.
+INSERT INTO app_settings (scope, key, value, v, description)
+SELECT 'global', key, value, value, description
 FROM app_settings
 WHERE scope = 'warehousecore' AND key = 'app.currency'
-ON CONFLICT (scope, key) DO UPDATE
-    SET value = EXCLUDED.value,
-        updated_at = NOW();
-
--- 2. Seed default global currency if still missing (fresh installs).
-INSERT INTO app_settings (scope, key, value, description)
-VALUES ('global', 'app.currency', '{"symbol": "€"}', 'Currency symbol shared between RentalCore and WarehouseCore')
 ON CONFLICT (scope, key) DO NOTHING;
+
+-- 2. Seed/normalize global currency: insert if missing, or update if the existing
+--    value is not a valid JSON object with a "symbol" key (e.g. legacy plain-text values).
+INSERT INTO app_settings (scope, key, value, v, description)
+VALUES ('global', 'app.currency', '{"symbol": "€"}', '{"symbol": "€"}', 'Currency symbol shared between RentalCore and WarehouseCore')
+ON CONFLICT (scope, key) DO UPDATE
+    SET value       = EXCLUDED.value,
+        v           = EXCLUDED.value,
+        description = EXCLUDED.description,
+        updated_at  = NOW()
+WHERE app_settings.value IS NULL
+   OR app_settings.value NOT LIKE '%"symbol"%';

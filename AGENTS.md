@@ -17,7 +17,7 @@
 - `make build`, `make test`, `go test ./...` inside `warehousecore/` — build and test.
 
 ## Operations & Access
-- Docker images live at `nobentie/rentalcore` and `nobentie/warehousecore` on Docker Hub; they are built and pushed automatically via GitHub Actions — do not build or push manually.
+- The `cores-migrations` Docker image is published to GHCR (`ghcr.io/<org>/cores-migrations`) and built/pushed automatically via GitHub Actions on merge — do not build or push manually.
 
 ## Coding Style & Naming Conventions
 - Run `gofmt` (or `go fmt ./...`) before review; apply `goimports` when imports change.

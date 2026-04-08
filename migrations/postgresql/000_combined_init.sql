@@ -482,14 +482,14 @@ FROM job_devices;
 CREATE OR REPLACE FUNCTION jobdevices_instead_insert()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-    NEW.is_package_item := COALESCE(NEW.is_package_item, FALSE);
-    NEW.pack_status := COALESCE(NEW.pack_status, 'pending');
-
     INSERT INTO job_devices (jobid, deviceid, custom_price, package_id, is_package_item, pack_status, pack_ts)
     VALUES (NEW.jobid, NEW.deviceid, NEW.custom_price, NEW.package_id,
-            NEW.is_package_item, NEW.pack_status, NEW.pack_ts)
+            COALESCE(NEW.is_package_item, FALSE), COALESCE(NEW.pack_status, 'pending'), NEW.pack_ts)
     ON CONFLICT (jobid, deviceid) DO UPDATE
-        SET pack_status = EXCLUDED.pack_status, pack_ts = EXCLUDED.pack_ts;
+        SET pack_status = EXCLUDED.pack_status, pack_ts = EXCLUDED.pack_ts
+    RETURNING jobid, deviceid, custom_price, package_id, is_package_item, pack_status, pack_ts
+        INTO NEW.jobid, NEW.deviceid, NEW.custom_price, NEW.package_id,
+             NEW.is_package_item, NEW.pack_status, NEW.pack_ts;
     RETURN NEW;
 END; $$;
 
