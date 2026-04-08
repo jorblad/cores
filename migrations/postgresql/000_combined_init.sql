@@ -1785,8 +1785,9 @@ INSERT INTO app_settings (scope, key, value, description) VALUES
     ('warehousecore', 'api.case_limit',   '50000', 'Maximum number of cases returned by the API')
 ON CONFLICT (scope, key) DO NOTHING;
 
--- Default currency symbol for WarehouseCore UI
+-- Default currency symbol settings
 INSERT INTO app_settings (scope, key, value, description) VALUES
+    ('global',        'app.currency', '{"symbol": "€"}', 'Canonical shared currency symbol setting'),
     ('warehousecore', 'app.currency', '{"symbol": "€"}', 'Currency symbol displayed in WarehouseCore UI')
 ON CONFLICT (scope, key) DO NOTHING;
 
