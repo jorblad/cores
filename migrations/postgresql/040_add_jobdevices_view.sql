@@ -43,7 +43,16 @@ BEGIN
     )
     ON CONFLICT (jobid, deviceid) DO UPDATE
         SET pack_status = EXCLUDED.pack_status,
-            pack_ts     = EXCLUDED.pack_ts;
+            pack_ts     = EXCLUDED.pack_ts
+    RETURNING
+        jobid,
+        deviceid,
+        custom_price,
+        package_id,
+        is_package_item,
+        pack_status,
+        pack_ts
+    INTO NEW;
     RETURN NEW;
 END;
 $$;
