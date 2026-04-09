@@ -15,14 +15,14 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'app_settings' AND column_name = 'key'
+        WHERE table_schema = 'public' AND table_name = 'app_settings' AND column_name = 'key'
     ) THEN
         ALTER TABLE app_settings ADD COLUMN key TEXT;
     END IF;
 
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'app_settings' AND column_name = 'k'
+        WHERE table_schema = 'public' AND table_name = 'app_settings' AND column_name = 'k'
     ) THEN
         UPDATE app_settings
         SET key = k
@@ -36,14 +36,14 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'app_settings' AND column_name = 'value'
+        WHERE table_schema = 'public' AND table_name = 'app_settings' AND column_name = 'value'
     ) THEN
         ALTER TABLE app_settings ADD COLUMN value TEXT;
     END IF;
 
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'app_settings' AND column_name = 'v'
+        WHERE table_schema = 'public' AND table_name = 'app_settings' AND column_name = 'v'
     ) THEN
         UPDATE app_settings
         SET value = v
@@ -68,7 +68,9 @@ BEGIN
         SELECT 1
         FROM pg_index i
         JOIN pg_class c ON c.oid = i.indrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE c.relname = 'app_settings'
+          AND n.nspname = 'public'
           AND i.indisunique
           AND i.indnkeyatts = 2
           AND EXISTS (
@@ -87,6 +89,6 @@ END;
 $$;
 
 -- Step 6: Recreate the single-column lookup index on the key column.
-CREATE INDEX IF NOT EXISTS idx_app_setting_key ON app_settings (key);
+CREATE INDEX IF NOT EXISTS idx_app_settings_key ON app_settings (key);
 
 COMMIT;

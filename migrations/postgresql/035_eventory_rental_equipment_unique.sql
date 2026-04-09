@@ -37,7 +37,7 @@ WHERE equipment_id IN (
 -- Use NULLS NOT DISTINCT so rows with the same product_name and a NULL
 -- supplier_name are also treated as duplicates, which keeps ON CONFLICT
 -- (product_name, supplier_name) upserts stable when supplier_name is NULL.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_rental_equipment_name_supplier
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rental_equipment_name_supplier
     ON rental_equipment (product_name, supplier_name) NULLS NOT DISTINCT;
 
 COMMIT;
