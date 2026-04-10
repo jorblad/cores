@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""Smart sync of warehousecore migrations into cores/migrations/postgresql.
+
+Heuristics:
+- Skip exact-duplicates (identical normalized content).
+- If `000_combined_init.sql` already contains `CREATE TABLE` for a table referenced by the
+  warehouse migration, the migration is considered covered and skipped.
+- If combined init contains `INSERT INTO <table>` and the warehouse migration is a seed
+  (`INSERT INTO`) for the same table, skip to avoid duplicate seeding.
+- If a cores migration has high textual similarity to the warehouse migration (default
+  threshold 0.7), it's treated as duplicate and skipped.
+
+Usage:
+  python3 scripts/sync_warehouse_migrations.py --dry-run
+  python3 scripts/sync_warehouse_migrations.py --apply
+  python3 scripts/sync_warehouse_migrations.py --source ../warehousecore/migrations --dest migrations/postgresql --apply
+"""
+
+import argparse
+import re
+import shutil
+import sys
+from pathlib import Path
+from difflib import SequenceMatcher
+
+
+def normalize_sql(s: str) -> str:
+    # remove /* */ comments
+    s = re.sub(r'/\*.*?\*/', ' ', s, flags=re.S)
+    # remove -- comments
+    s = re.sub(r'--.*?\n', ' ', s)
+    # collapse whitespace
+    s = re.sub(r"\s+", ' ', s)
+    return s.strip().lower()
+
+
+def extract_tables(s: str):
+    tables = set()
+    # patterns for CREATE/ALTER/INSERT/UPDATE/INTO
+    patterns = [r'create table if not exists\s+`?"?([a-z0-9_]+)`?"?',
+                r'create table\s+`?"?([a-z0-9_]+)`?"?',
+                r'alter table\s+`?"?([a-z0-9_]+)`?"?',
+                r'insert into\s+`?"?([a-z0-9_]+)`?"?',
+                r'update\s+`?"?([a-z0-9_]+)`?"?']
+    for p in patterns:
+        for m in re.finditer(p, s, flags=re.I):
+            tables.add(m.group(1).lower())
+    return tables
+
+
+def similar(a: str, b: str) -> float:
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def load_files(path: Path, pattern='*.sql'):
+    files = []
+    if not path.exists():
+        return files
+    for p in sorted(path.glob(pattern)):
+        if p.is_file():
+            files.append(p)
+    return files
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument('--source', default='../warehousecore/migrations', help='warehousecore migrations dir')
+    p.add_argument('--dest', default='migrations/postgresql', help='cores migrations dir (relative to repo root)')
+    p.add_argument('--dry-run', action='store_true', default=True, help='Show actions but do not copy')
+    p.add_argument('--repo-root', default=None, help='Override repo root directory (useful when running from a subfolder)')
+    p.add_argument('--apply', action='store_true', help='Copy selected migrations')
+    p.add_argument('--include-downs', action='store_true', help='Include down/rollback files (default: skip)')
+    p.add_argument('--threshold', type=float, default=0.70, help='Similarity threshold to treat as duplicate')
+    args = p.parse_args()
+
+    # Default repo root: current working directory. Allow override with --repo-root.
+    if args.repo_root:
+        repo_root = Path(args.repo_root).resolve()
+    else:
+        repo_root = Path.cwd().resolve()
+    src_dir = (repo_root / args.source).resolve()
+    dst_dir = (repo_root / args.dest).resolve()
+    combined_init = dst_dir / '000_combined_init.sql'
+
+    if not src_dir.exists():
+        print('Source dir not found:', src_dir)
+        sys.exit(2)
+    if not dst_dir.exists():
+        print('Destination dir not found, creating:', dst_dir)
+        if args.apply:
+            dst_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            dst_dir.mkdir(parents=True, exist_ok=True)
+
+    warehouse_files = load_files(src_dir)
+    core_files = load_files(dst_dir)
+
+    core_contents = {p.name: p.read_text(encoding='utf-8', errors='ignore') for p in core_files}
+    core_norm = {name: normalize_sql(c) for name, c in core_contents.items()}
+    combined_text = ''
+    if combined_init.exists():
+        combined_text = combined_init.read_text(encoding='utf-8', errors='ignore')
+        combined_norm = normalize_sql(combined_text)
+    else:
+        combined_norm = ''
+
+    to_copy = []
+    skipped = []
+
+    for wf in warehouse_files:
+        # skip down/rollback files by default
+        if wf.name.lower().endswith('_down.sql') and not args.include_downs:
+            skipped.append((wf.name, 'skipped_down_file'))
+            continue
+        wtext = wf.read_text(encoding='utf-8', errors='ignore')
+        wnorm = normalize_sql(wtext)
+        wtables = extract_tables(wtext)
+
+        # 1) exact duplicate
+        if wnorm in core_norm.values():
+            skipped.append((wf.name, 'identical_exists'))
+            continue
+
+        # 2) table already created in combined init -> skip
+        created_here = False
+        for t in wtables:
+            if re.search(r'create table .*\b' + re.escape(t) + r'\b', combined_norm):
+                created_here = True
+                break
+        if created_here:
+            skipped.append((wf.name, 'covered_by_combined_init'))
+            continue
+
+        # 3) seed duplication: if warehouse migration is INSERT INTO and combined has INSERT INTO same table
+        if re.search(r'insert into', wtext, flags=re.I):
+            seeded = False
+            for t in wtables:
+                if re.search(r'insert into\s+\b' + re.escape(t) + r'\b', combined_norm):
+                    seeded = True
+                    break
+            if seeded:
+                skipped.append((wf.name, 'seed_covered_by_combined_init'))
+                continue
+
+        # 4) similarity to any existing core file
+        similar_found = False
+        for name, cnorm in core_norm.items():
+            if similar(wnorm, cnorm) >= args.threshold:
+                skipped.append((wf.name, f'similar_to_{name}'))
+                similar_found = True
+                break
+        if similar_found:
+            continue
+
+        # otherwise schedule for copy
+        to_copy.append(wf)
+
+    # Report
+    print('\nSummary:')
+    print('  Warehouse migrations found:', len(warehouse_files))
+    print('  To copy:', len(to_copy))
+    if skipped:
+        print('  Skipped:', len(skipped))
+        for name, reason in skipped:
+            print('   -', name, ':', reason)
+
+    if not to_copy:
+        print('\nNo migrations to copy.')
+        return
+
+    if args.apply:
+        for wf in to_copy:
+            dst = dst_dir / wf.name
+            print('Copying', wf.name, '->', dst.relative_to(repo_root))
+            shutil.copy2(wf, dst)
+        print('\nDone. Please review and commit the copied files manually.')
+    else:
+        print('\nDry-run mode. Use --apply to copy the files:')
+        for wf in to_copy:
+            print('  [DRY] would copy:', wf.name)
+
+
+if __name__ == '__main__':
+    main()
