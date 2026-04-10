@@ -43,29 +43,34 @@ WHERE ctid IN (
 DO $$
 BEGIN
     IF NOT EXISTS (
-    -- Check for a named UNIQUE constraint on exactly (deviceID, jobID)
+    -- Check for a named UNIQUE constraint on exactly (deviceID, jobID) in its
+    -- defined column order.
     SELECT 1
     FROM   pg_constraint c
     WHERE  c.contype  = 'u'
       AND  c.conrelid = 'job_devices'::regclass
       AND  (
-          SELECT array_agg(a.attname::text ORDER BY a.attname)
-          FROM   pg_attribute a
-          WHERE  a.attrelid = c.conrelid
-            AND  a.attnum   = ANY(c.conkey)
+          SELECT array_agg(a.attname::text ORDER BY ck.ord)
+          FROM   unnest(c.conkey::smallint[]) WITH ORDINALITY AS ck(attnum, ord)
+          JOIN   pg_attribute a
+            ON   a.attrelid = c.conrelid
+           AND   a.attnum   = ck.attnum
         ) = ARRAY['deviceid', 'jobid']
     UNION ALL
-    -- Check for a standalone UNIQUE index on exactly (deviceID, jobID)
+    -- Check for a standalone non-partial UNIQUE index on exactly
+    -- (deviceID, jobID) in its defined column order.
     SELECT 1
     FROM   pg_index i
-    WHERE  i.indrelid  = 'job_devices'::regclass
+    WHERE  i.indrelid    = 'job_devices'::regclass
       AND  i.indisunique = true
+      AND  i.indpred IS NULL
       AND  (
-        SELECT array_agg(a.attname::text ORDER BY a.attname)
-        FROM   pg_attribute a
-        WHERE  a.attrelid = i.indrelid
-          AND  a.attnum   = ANY(i.indkey)
-          AND  a.attnum   > 0
+        SELECT array_agg(a.attname::text ORDER BY ik.ord)
+        FROM   unnest(i.indkey::smallint[]) WITH ORDINALITY AS ik(attnum, ord)
+        JOIN   pg_attribute a
+          ON   a.attrelid = i.indrelid
+         AND   a.attnum   = ik.attnum
+        WHERE  ik.attnum > 0
       ) = ARRAY['deviceid', 'jobid']
   ) THEN
     ALTER TABLE job_devices

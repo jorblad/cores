@@ -11,7 +11,7 @@ Heuristics:
   threshold 0.7), it's treated as duplicate and skipped.
 
 Usage:
-  python3 scripts/sync_warehouse_migrations.py --dry-run
+  python3 scripts/sync_warehouse_migrations.py
   python3 scripts/sync_warehouse_migrations.py --apply
   python3 scripts/sync_warehouse_migrations.py --source ../warehousecore/migrations --dest migrations/postgresql --apply
 """
@@ -66,18 +66,18 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--source', default='../warehousecore/migrations', help='warehousecore migrations dir')
     p.add_argument('--dest', default='migrations/postgresql', help='cores migrations dir (relative to repo root)')
-    p.add_argument('--dry-run', action='store_true', default=True, help='Show actions but do not copy')
-    p.add_argument('--repo-root', default=None, help='Override repo root directory (useful when running from a subfolder)')
-    p.add_argument('--apply', action='store_true', help='Copy selected migrations')
+    p.add_argument('--repo-root', default=None, help='Override repo root directory (default: derived from script location)')
+    p.add_argument('--apply', action='store_true', help='Copy selected migrations (default: dry-run)')
     p.add_argument('--include-downs', action='store_true', help='Include down/rollback files (default: skip)')
     p.add_argument('--threshold', type=float, default=0.70, help='Similarity threshold to treat as duplicate')
     args = p.parse_args()
 
-    # Default repo root: current working directory. Allow override with --repo-root.
+    # Default repo root: directory containing this script's parent (i.e. the repo root).
+    # Allow override with --repo-root for non-standard layouts.
     if args.repo_root:
         repo_root = Path(args.repo_root).resolve()
     else:
-        repo_root = Path.cwd().resolve()
+        repo_root = Path(__file__).resolve().parents[1]
     src_dir = (repo_root / args.source).resolve()
     dst_dir = (repo_root / args.dest).resolve()
     combined_init = dst_dir / '000_combined_init.sql'
@@ -86,11 +86,11 @@ def main():
         print('Source dir not found:', src_dir)
         sys.exit(2)
     if not dst_dir.exists():
-        print('Destination dir not found, creating:', dst_dir)
         if args.apply:
+            print('Destination dir not found, creating:', dst_dir)
             dst_dir.mkdir(parents=True, exist_ok=True)
         else:
-            dst_dir.mkdir(parents=True, exist_ok=True)
+            print('Destination dir not found; would create:', dst_dir)
 
     warehouse_files = load_files(src_dir)
     core_files = load_files(dst_dir)
@@ -109,7 +109,8 @@ def main():
 
     for wf in warehouse_files:
         # skip down/rollback files by default
-        if wf.name.lower().endswith('_down.sql') and not args.include_downs:
+        lower_name = wf.name.lower()
+        if (lower_name.endswith('_down.sql') or lower_name.endswith('.down.sql')) and not args.include_downs:
             skipped.append((wf.name, 'skipped_down_file'))
             continue
         wtext = wf.read_text(encoding='utf-8', errors='ignore')
@@ -121,13 +122,19 @@ def main():
             skipped.append((wf.name, 'identical_exists'))
             continue
 
-        # 2) table already created in combined init -> skip
-        created_here = False
-        for t in wtables:
-            if re.search(r'create table .*\b' + re.escape(t) + r'\b', combined_norm):
-                created_here = True
+        # 2) table already created in combined init AND this migration is a CREATE TABLE
+        #    -> skip (only skip if this migration is actually creating that same table)
+        wtext_tables_created = set()
+        for p in [r'create table if not exists\s+[`"]?([a-z0-9_]+)[`"]?',
+                  r'create table\s+[`"]?([a-z0-9_]+)[`"]?']:
+            for m in re.finditer(p, wtext, flags=re.I):
+                wtext_tables_created.add(m.group(1).lower())
+        covered = False
+        for t in wtext_tables_created:
+            if re.search(r'create table(?:\s+if\s+not\s+exists)?\s+' + re.escape(t) + r'\b', combined_norm, flags=re.I):
+                covered = True
                 break
-        if created_here:
+        if covered:
             skipped.append((wf.name, 'covered_by_combined_init'))
             continue
 

@@ -15,11 +15,6 @@ DECLARE
     pos_cat INT;
     next_counter INT;
 BEGIN
-    -- Skip auto-generation for virtual package devices (start with PKG_)
-    IF NEW.deviceID IS NOT NULL AND NEW.deviceID LIKE 'PKG_%' THEN
-        RETURN NEW;
-    END IF;
-
     -- 1) Get abbreviation from subcategory
     SELECT s.abbreviation
       INTO abkuerzung
