@@ -66,7 +66,7 @@ def has_dml_or_extra_ddl(sql_norm: str) -> bool:
         sql_norm, flags=re.I))
 
 
-
+def similar(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
 
 

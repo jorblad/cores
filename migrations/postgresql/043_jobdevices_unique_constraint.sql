@@ -6,31 +6,27 @@
 -- job_devices, which enforces uniqueness on the pair but in (jobid, deviceid) order.
 -- PostgreSQL's ON CONFLICT clause requires an index whose column order exactly matches
 -- the conflict target, so a separate index/constraint on (deviceid, jobid) is needed
--- for ON CONFLICT (deviceid, jobid) to work as expected. This migration creates that
--- constraint and is safe to re-run (idempotent guard below).
+-- for ON CONFLICT (deviceid, jobid) to work as expected.
 --
--- Both steps run inside a single transaction with an explicit table lock so
--- that no concurrent INSERT/UPDATE can create a new duplicate row between the
--- DELETE and the constraint addition. The lock blocks writes briefly; on a
--- small table this is negligible. If the table is large and write availability
--- is critical, run during a maintenance window.
+-- Implementation approach (non-blocking for large tables):
+--   Phase 1 – Remove duplicate rows inside a transaction with ACCESS EXCLUSIVE lock.
+--             The stronger lock prevents new duplicates from racing in during cleanup.
+--   Phase 2 – Build the unique index with CONCURRENTLY so the index build does NOT
+--             hold an ACCESS EXCLUSIVE lock for its full duration. CONCURRENTLY cannot
+--             run inside a transaction block, so it appears outside BEGIN/COMMIT.
+--   Phase 3 – Promote the completed index to a named UNIQUE constraint. This takes
+--             only a brief ACCESS EXCLUSIVE lock to update the catalog, not to scan
+--             the table.
 --
--- The idempotency guard skips constraint creation if any of the following
--- already covers (deviceid, jobid) in that column order:
---   • a named UNIQUE constraint
---   • a non-partial UNIQUE index
---   • a primary key (handles future schema changes where PK order may change)
+-- All three phases are idempotent: re-running this file after a partial failure is safe.
+
+-- ─── Phase 1: Remove duplicate rows ────────────────────────────────────────────
 BEGIN;
 
--- Lock the table for the duration of this migration to prevent concurrent
--- writes from inserting a new duplicate row between the DELETE and the
--- constraint addition. SHARE ROW EXCLUSIVE blocks INSERT, UPDATE, and DELETE
--- from other sessions while this transaction is open.
-LOCK TABLE job_devices IN SHARE ROW EXCLUSIVE MODE;
+-- Take ACCESS EXCLUSIVE up-front so no concurrent writer can insert a new
+-- duplicate row between the duplicate scan and the DELETE.
+LOCK TABLE job_devices IN ACCESS EXCLUSIVE MODE;
 
--- Step 1: Remove any duplicate (deviceID, jobID) pairs that would violate the
--- constraint, keeping the row with the newest pack_ts and using ctid only as a
--- deterministic tie-breaker when pack_ts values are equal or NULL.
 DELETE FROM job_devices
 WHERE ctid IN (
   SELECT ctid
@@ -45,46 +41,59 @@ WHERE ctid IN (
   WHERE rn > 1
 );
 
--- Step 2: Add the unique constraint (idempotent: skip if any unique constraint,
--- unique index, or primary key already covers exactly (deviceID, jobID) in that
--- column order on job_devices, regardless of name).
+COMMIT;
+
+-- ─── Phase 2: Build the unique index non-blocking ───────────────────────────────
+-- CONCURRENTLY must run outside a transaction block (enforced by PostgreSQL).
+-- IF NOT EXISTS makes this idempotent.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_job_devices_deviceid_jobid
+    ON job_devices(deviceid, jobid);
+
+-- ─── Phase 3: Promote the index to a named UNIQUE constraint (idempotent) ───────
+-- ADD CONSTRAINT USING INDEX takes only a brief catalog lock; the expensive
+-- index build was already done non-blocking in Phase 2.
+-- Skip if any unique constraint or primary key already covers (deviceid, jobid)
+-- in that exact column order, OR if our named constraint already exists.
 DO $$
+DECLARE
+    v_covered   boolean;
+    v_idx_ready boolean;
 BEGIN
-    IF NOT EXISTS (
-    -- Check for a named UNIQUE constraint on exactly (deviceID, jobID) in its
-    -- defined column order.
-    SELECT 1
-    FROM   pg_constraint c
-    WHERE  c.contype  IN ('u', 'p')
-      AND  c.conrelid = 'job_devices'::regclass
-      AND  (
-          SELECT array_agg(a.attname::text ORDER BY ck.ord)
-          FROM   unnest(c.conkey::smallint[]) WITH ORDINALITY AS ck(attnum, ord)
-          JOIN   pg_attribute a
-            ON   a.attrelid = c.conrelid
-           AND   a.attnum   = ck.attnum
-        ) = ARRAY['deviceid', 'jobid']
-    UNION ALL
-    -- Check for a standalone non-partial UNIQUE index on exactly
-    -- (deviceID, jobID) in its defined column order.
-    SELECT 1
-    FROM   pg_index i
-    WHERE  i.indrelid    = 'job_devices'::regclass
-      AND  i.indisunique = true
-      AND  i.indpred IS NULL
-      AND  (
-        SELECT array_agg(a.attname::text ORDER BY ik.ord)
-        FROM   unnest(i.indkey::smallint[]) WITH ORDINALITY AS ik(attnum, ord)
-        JOIN   pg_attribute a
-          ON   a.attrelid = i.indrelid
-         AND   a.attnum   = ik.attnum
-        WHERE  ik.attnum > 0
-      ) = ARRAY['deviceid', 'jobid']
-  ) THEN
-    ALTER TABLE job_devices
-      ADD CONSTRAINT uq_job_devices_device_job UNIQUE (deviceid, jobid);
-  END IF;
+    -- Check for an existing constraint (unique or pk) on (deviceid, jobid)
+    SELECT EXISTS (
+        SELECT 1
+        FROM   pg_constraint c
+        WHERE  c.contype  IN ('u', 'p')
+          AND  c.conrelid = 'job_devices'::regclass
+          AND  (
+              SELECT array_agg(a.attname::text ORDER BY ck.ord)
+              FROM   unnest(c.conkey::smallint[]) WITH ORDINALITY AS ck(attnum, ord)
+              JOIN   pg_attribute a
+                ON   a.attrelid = c.conrelid
+               AND   a.attnum   = ck.attnum
+          ) = ARRAY['deviceid', 'jobid']
+    ) INTO v_covered;
+
+    IF v_covered THEN
+        RETURN;  -- Already covered; nothing to do
+    END IF;
+
+    -- Check that the index from Phase 2 is present and valid
+    SELECT EXISTS (
+        SELECT 1
+        FROM   pg_class ic
+        JOIN   pg_index i ON i.indexrelid = ic.oid
+        WHERE  ic.relname    = 'idx_job_devices_deviceid_jobid'
+          AND  i.indrelid    = 'job_devices'::regclass
+          AND  i.indisunique = true
+          AND  i.indisvalid  = true
+    ) INTO v_idx_ready;
+
+    IF v_idx_ready THEN
+        ALTER TABLE job_devices
+            ADD CONSTRAINT uq_job_devices_deviceid_jobid
+            UNIQUE USING INDEX idx_job_devices_deviceid_jobid;
+    END IF;
 END;
 $$;
 
-COMMIT;
