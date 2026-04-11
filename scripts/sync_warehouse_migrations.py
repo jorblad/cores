@@ -86,6 +86,7 @@ def main():
     p.add_argument('--dest', default='migrations/postgresql', help='cores migrations dir (relative to repo root)')
     p.add_argument('--repo-root', default=None, help='Override repo root directory (default: derived from script location)')
     p.add_argument('--apply', action='store_true', help='Copy selected migrations (default: dry-run)')
+    p.add_argument('--force', action='store_true', help='Overwrite existing destination files even when content differs (requires --apply)')
     p.add_argument('--include-downs', action='store_true', help='Include down/rollback files (default: skip)')
     p.add_argument('--threshold', type=float, default=0.70, help='Similarity threshold to treat as duplicate')
     args = p.parse_args()
@@ -115,6 +116,8 @@ def main():
 
     core_contents = {p.name: p.read_text(encoding='utf-8', errors='ignore') for p in core_files}
     core_norm = {name: normalize_sql(c) for name, c in core_contents.items()}
+    # Pre-build a set of normalized content values for O(1) exact-duplicate checks.
+    core_norm_set = set(core_norm.values())
     combined_text = ''
     if combined_init.exists():
         combined_text = combined_init.read_text(encoding='utf-8', errors='ignore')
@@ -124,6 +127,7 @@ def main():
 
     to_copy = []
     skipped = []
+    needs_review = []  # Files scheduled for copy but flagged for manual review
 
     for wf in warehouse_files:
         # skip down/rollback files by default
@@ -136,7 +140,7 @@ def main():
         wtables = extract_tables(wtext)
 
         # 1) exact duplicate
-        if wnorm in core_norm.values():
+        if wnorm in core_norm_set:
             skipped.append((wf.name, 'identical_exists'))
             continue
 
@@ -156,9 +160,9 @@ def main():
             if re.search(r'create table(?:\s+if\s+not\s+exists)?\s+' + re.escape(t) + r'\b',
                          combined_norm, flags=re.I):
                 if has_extra_ddl:
-                    skipped.append((wf.name,
-                                    f'needs_manual_review (table {t!r} in combined_init '
-                                    f'but migration has extra DDL/DML)'))
+                    needs_review.append((wf.name,
+                                        f'table {t!r} in combined_init '
+                                        f'but migration has extra DDL/DML — review before applying'))
                 else:
                     covered = True
                 break
@@ -197,6 +201,10 @@ def main():
     print('\nSummary:')
     print('  Warehouse migrations found:', len(warehouse_files))
     print('  To copy:', len(to_copy))
+    if needs_review:
+        print('  Needs manual review (will be copied):', len(needs_review))
+        for name, reason in needs_review:
+            print('   ! ', name, ':', reason)
     if skipped:
         print('  Skipped:', len(skipped))
         for name, reason in skipped:
@@ -209,13 +217,34 @@ def main():
     if args.apply:
         for wf in to_copy:
             dst = dst_dir / wf.name
-            print('Copying', wf.name, '->', dst.relative_to(repo_root))
+            if dst.exists():
+                dst_norm = normalize_sql(dst.read_text(encoding='utf-8', errors='ignore'))
+                wf_norm = normalize_sql(wf.read_text(encoding='utf-8', errors='ignore'))
+                if dst_norm == wf_norm:
+                    print('Skipping (identical):', wf.name)
+                    continue
+                if not args.force:
+                    print(f'WARN: {wf.name} already exists at destination with different content. '
+                          f'Use --force to overwrite.')
+                    continue
+                print('Overwriting (--force):', wf.name, '->', dst.relative_to(repo_root))
+            else:
+                print('Copying', wf.name, '->', dst.relative_to(repo_root))
             shutil.copy2(wf, dst)
         print('\nDone. Please review and commit the copied files manually.')
     else:
         print('\nDry-run mode. Use --apply to copy the files:')
         for wf in to_copy:
-            print('  [DRY] would copy:', wf.name)
+            dst = dst_dir / wf.name
+            if dst.exists():
+                dst_norm = normalize_sql(dst.read_text(encoding='utf-8', errors='ignore'))
+                wf_norm = normalize_sql(wf.read_text(encoding='utf-8', errors='ignore'))
+                if dst_norm == wf_norm:
+                    print('  [DRY] would skip (identical):', wf.name)
+                else:
+                    print('  [DRY] would overwrite (use --force):', wf.name)
+            else:
+                print('  [DRY] would copy:', wf.name)
 
 
 if __name__ == '__main__':

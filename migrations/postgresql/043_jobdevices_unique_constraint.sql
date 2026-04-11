@@ -1,4 +1,4 @@
--- Add a unique constraint on (deviceID, jobID) to the jobdevices table.
+-- Add a unique constraint on (deviceID, jobID) to the `job_devices` table.
 -- This is required so that the INSERT ... ON CONFLICT (deviceID, jobID) DO UPDATE
 -- query used during outtake scanning works correctly in PostgreSQL.
 --
@@ -8,12 +8,14 @@
 -- the conflict target, so a separate index/constraint on (deviceid, jobid) is needed
 -- for ON CONFLICT (deviceid, jobid) to work as expected.
 --
--- Implementation approach (non-blocking for large tables):
+-- Implementation approach (minimises blocking during index creation):
 --   Phase 1 – Remove duplicate rows inside a transaction with ACCESS EXCLUSIVE lock.
---             The stronger lock prevents new duplicates from racing in during cleanup.
---   Phase 2 – Build the unique index with CONCURRENTLY so the index build does NOT
---             hold an ACCESS EXCLUSIVE lock for its full duration. CONCURRENTLY cannot
---             run inside a transaction block, so it appears outside BEGIN/COMMIT.
+--             This blocks reads and writes on the table for the duration of the
+--             cleanup (full-table window scan + delete), but prevents new duplicates
+--             from racing in during that window.
+--   Phase 2 – Build the unique index with CONCURRENTLY so the index build itself does
+--             NOT hold an ACCESS EXCLUSIVE lock for its full duration. CONCURRENTLY
+--             cannot run inside a transaction block, so it appears outside BEGIN/COMMIT.
 --   Phase 3 – Promote the completed index to a named UNIQUE constraint. This takes
 --             only a brief ACCESS EXCLUSIVE lock to update the catalog, not to scan
 --             the table.
