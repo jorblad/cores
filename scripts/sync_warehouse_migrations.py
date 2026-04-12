@@ -112,6 +112,9 @@ def main():
     p.add_argument('--threshold', type=float, default=0.70, help='Similarity threshold to treat as duplicate')
     args = p.parse_args()
 
+    if args.force and not args.apply:
+        p.error('--force requires --apply')
+
     # Default repo root: directory containing this script's parent (i.e. the repo root).
     # Allow override with --repo-root for non-standard layouts.
     if args.repo_root:
@@ -184,9 +187,13 @@ def main():
         #    Reuse extract_tables (via wtables / combined_tables) so that schema-qualified
         #    identifiers like public.foo are normalized to bare names on both sides.
         has_extra_ddl = has_dml_or_extra_ddl(wnorm)
+        # Only trigger the covered_by_combined_init heuristic for migrations that
+        # actually contain CREATE TABLE statements.  Insert-only (and other DML-only)
+        # files must fall through to the seed-coverage heuristic (step 3) below.
+        has_create_table = bool(re.search(r'\bcreate\s+table\b', wnorm, flags=re.I))
         covered = False
         force_copy = False
-        if wtables:
+        if has_create_table and wtables:
             all_in_combined = wtables.issubset(combined_tables)
             if all_in_combined:
                 if has_extra_ddl:

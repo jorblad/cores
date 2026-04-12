@@ -1,5 +1,5 @@
--- Add a unique constraint on (deviceID, jobID) to the `job_devices` table.
--- This is required so that the INSERT ... ON CONFLICT (deviceID, jobID) DO UPDATE
+-- Add a unique constraint on (deviceid, jobid) to the `job_devices` table.
+-- This is required so that the INSERT ... ON CONFLICT (deviceid, jobid) DO UPDATE
 -- query used during outtake scanning works correctly in PostgreSQL.
 --
 -- Note: 000_combined_init.sql already defines PRIMARY KEY (jobid, deviceid) on
@@ -39,7 +39,7 @@ WHERE ctid IN (
   FROM (
     SELECT ctid,
            ROW_NUMBER() OVER (
-             PARTITION BY deviceID, jobID
+             PARTITION BY deviceid, jobid
              ORDER BY (pack_ts IS NULL), pack_ts DESC, ctid DESC
            ) AS rn
     FROM public.job_devices
