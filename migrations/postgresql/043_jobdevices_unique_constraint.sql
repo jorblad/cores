@@ -16,6 +16,10 @@
 --   and cause the index build to fail.  For a table this small the extra lock duration
 --   is negligible.
 --
+--   Session timeouts are set before the transaction to fail fast rather than hang:
+--     – lock_timeout = 5 s  (abort if the ACCESS EXCLUSIVE lock cannot be acquired)
+--     – statement_timeout = 120 s  (abort if the full transaction takes too long)
+--
 --   Phase 1 (inside BEGIN/COMMIT):
 --     – LOCK IN ACCESS EXCLUSIVE MODE  (blocks readers/writers)
 --     – DELETE duplicate rows
@@ -25,6 +29,13 @@
 --       Skip if any unique/pk constraint already covers (deviceid, jobid) in order.
 --
 -- All phases are idempotent: re-running this file after a partial failure is safe.
+
+-- Set session-scoped timeouts so this migration fails fast instead of hanging.
+-- lock_timeout: abort if the ACCESS EXCLUSIVE lock cannot be acquired within 5 s.
+-- statement_timeout: abort if the full transaction takes longer than 2 minutes.
+-- Both settings are scoped to this psql session and reset automatically on exit.
+SET lock_timeout = '5s';
+SET statement_timeout = '120s';
 
 -- ─── Phase 1: Remove duplicates and build the unique index ───────────────────────
 BEGIN;
